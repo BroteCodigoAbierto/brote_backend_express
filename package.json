@@ -1,0 +1,28 @@
+{
+  "name": "brote_backend_express",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/BroteCodigoAbierto/brote_backend_express#readme",
+  "bugs": {
+    "url": "https://github.com/BroteCodigoAbierto/brote_backend_express/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BroteCodigoAbierto/brote_backend_express.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "app.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.5.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
