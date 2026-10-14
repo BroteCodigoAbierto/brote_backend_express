@@ -1,7 +1,10 @@
 {
   "name": "brote_backend_express",
   "version": "1.0.0",
-  "description": "",
+  "description": "API REST de Brote: cursos interactivos creados por la comunidad",
+  "private": true,
+  "license": "MIT",
+  "author": "BroteCodigoAbierto",
   "homepage": "https://github.com/BroteCodigoAbierto/brote_backend_express#readme",
   "bugs": {
     "url": "https://github.com/BroteCodigoAbierto/brote_backend_express/issues"
@@ -10,19 +13,34 @@
     "type": "git",
     "url": "git+https://github.com/BroteCodigoAbierto/brote_backend_express.git"
   },
-  "license": "ISC",
-  "author": "",
   "type": "module",
-  "main": "app.ts",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "main": "src/servidor.ts",
+  "engines": {
+    "node": ">=24"
   },
-  "devDependencies": {
-    "@types/express": "^5.0.6",
-    "@types/node": "^26.5.0",
-    "typescript": "^7.0.2"
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch src/servidor.ts",
+    "start": "node --env-file-if-exists=.env src/servidor.ts",
+    "tipos": "tsc --noEmit",
+    "lint": "eslint .",
+    "formato": "prettier --write .",
+    "formato:revisar": "prettier --check .",
+    "bd:migrar": "prisma migrate dev",
+    "bd:generar": "prisma generate",
+    "bd:estudio": "prisma studio"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "prisma": "^7.10.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2"
   }
 }

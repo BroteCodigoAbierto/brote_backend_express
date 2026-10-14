@@ -1,0 +1,15 @@
+# PostgreSQL para desarrollo local:  podman compose up -d   (o docker compose up -d)
+services:
+  postgres:
+    image: docker.io/library/postgres:18
+    environment:
+      POSTGRES_USER: brote
+      POSTGRES_PASSWORD: brote
+      POSTGRES_DB: brote
+    ports:
+      - "5432:5432"
+    volumes:
+      - datos_postgres:/var/lib/postgresql
+
+volumes:
+  datos_postgres:

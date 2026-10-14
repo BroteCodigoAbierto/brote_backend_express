@@ -1,0 +1,17 @@
+// Esquema de la base de datos de Brote.
+// Los modelos se agregan con el plan de cada feature (ver brote_specs).
+// Convención: modelos y campos en español; tablas y columnas en snake_case
+// con @@map y @map.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generado/prisma"
+  // el código generado se importa como .ts, igual que el resto de la API
+  moduleFormat           = "esm"
+  importFileExtension    = "ts"
+  generatedFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
