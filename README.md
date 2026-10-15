@@ -20,7 +20,7 @@ npm install
 cp .env.example .env
 podman compose up -d        # o: docker compose up -d   → PostgreSQL en :5432
 npm run bd:migrar           # aplica las migraciones (cuando existan modelos)
-npm run dev                 # http://localhost:3000/salud
+npm run dev                 # http://localhost:3000/ping
 ```
 
 ## Scripts
