@@ -2,11 +2,17 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "nodenext",
+    "types": ["node"],
+    // Node 24 ejecuta los .ts directo (quita los tipos): por eso los imports
+    // llevan .ts y no se permite sintaxis que no se pueda borrar (enum, etc.)
     "rewriteRelativeImportExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true
-  }
+  },
+  "include": ["src", "prisma.config.ts"]
 }

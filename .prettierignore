@@ -1,0 +1,6 @@
+node_modules
+package-lock.json
+src/generado
+src/tipos/contrato.ts
+prisma/migrations
+.idea
