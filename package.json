@@ -27,7 +27,8 @@
     "formato:revisar": "prettier --check .",
     "bd:migrar": "prisma migrate dev",
     "bd:generar": "prisma generate",
-    "bd:estudio": "prisma studio"
+    "bd:estudio": "prisma studio",
+    "sesiones:expirar": "node --env-file-if-exists=.env scripts/expirar-sesiones.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
