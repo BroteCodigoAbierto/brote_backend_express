@@ -11,17 +11,24 @@ modelo de datos, contrato y decisiones.
 
 ## Stack
 
-Node 24 (ejecuta TypeScript directo) · Express 5 · Prisma 7 · PostgreSQL 18
+Node 24 (ejecuta TypeScript directo) · Express 5 · Prisma 7 · PostgreSQL 18 ·
+Better Auth
 
 ## Arrancar en local
 
 ```bash
 npm install
-cp .env.example .env
+cp .env.example .env        # llena SECRETO_AUTH: openssl rand -base64 32
 podman compose up -d        # o: docker compose up -d   → PostgreSQL en :5432
-npm run bd:migrar           # aplica las migraciones (cuando existan modelos)
+npm run bd:migrar           # aplica las migraciones y genera el cliente de Prisma
 npm run dev                 # http://localhost:3000/ping
 ```
+
+`npm run bd:migrar` (`prisma migrate dev`) necesita que el usuario de la base
+pueda crear bases de datos (Prisma usa una base temporal, la _shadow
+database_). El contenedor de `compose.yaml` ya lo permite; con un PostgreSQL
+propio, dale `CREATEDB` al usuario o aplica las migraciones existentes con
+`npx prisma migrate deploy` y luego `npm run bd:generar`.
 
 ## Scripts
 
