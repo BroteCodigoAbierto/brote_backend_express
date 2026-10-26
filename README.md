@@ -25,8 +25,8 @@ npm run dev                 # http://localhost:3000/ping
 ```
 
 `npm run bd:migrar` (`prisma migrate dev`) necesita que el usuario de la base
-pueda crear bases de datos (Prisma usa una base temporal, la *shadow
-database*). El contenedor de `compose.yaml` ya lo permite; con un PostgreSQL
+pueda crear bases de datos (Prisma usa una base temporal, la _shadow
+database_). El contenedor de `compose.yaml` ya lo permite; con un PostgreSQL
 propio, dale `CREATEDB` al usuario o aplica las migraciones existentes con
 `npx prisma migrate deploy` y luego `npm run bd:generar`.
 
