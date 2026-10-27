@@ -20,7 +20,9 @@ Better Auth
 npm install
 cp .env.example .env        # llena SECRETO_AUTH: openssl rand -base64 32
 podman compose up -d        # o: docker compose up -d   → PostgreSQL en :5432
-npm run bd:migrar           # aplica las migraciones y genera el cliente de Prisma
+npm run bd:migrar           # aplica las migraciones
+npm run bd:generar          # genera el cliente de Prisma (Prisma 7 no lo hace al migrar)
+npm run bd:sembrar          # cuentas y cursos de prueba; entra con autor@brote.test / brote12345
 npm run dev                 # http://localhost:3000/ping
 ```
 
@@ -32,16 +34,18 @@ propio, dale `CREATEDB` al usuario o aplica las migraciones existentes con
 
 ## Scripts
 
-| Script               | Qué hace                            |
-| -------------------- | ----------------------------------- |
-| `npm run dev`        | API con recarga al guardar          |
-| `npm start`          | API sin recarga                     |
-| `npm run tipos`      | Revisa los tipos con TypeScript     |
-| `npm run lint`       | ESLint                              |
-| `npm run formato`    | Formatea con Prettier               |
-| `npm run bd:migrar`  | Crea y aplica migraciones de Prisma |
-| `npm run bd:generar` | Regenera el cliente de Prisma       |
-| `npm run bd:estudio` | Abre Prisma Studio para ver la base |
+| Script                     | Qué hace                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `npm run dev`              | API con recarga al guardar                                                    |
+| `npm start`                | API sin recarga                                                               |
+| `npm run tipos`            | Revisa los tipos con TypeScript                                               |
+| `npm run lint`             | ESLint                                                                        |
+| `npm run formato`          | Formatea con Prettier                                                         |
+| `npm run bd:migrar`        | Crea y aplica migraciones de Prisma                                           |
+| `npm run bd:generar`       | Regenera el cliente de Prisma                                                 |
+| `npm run bd:estudio`       | Abre Prisma Studio para ver la base                                           |
+| `npm run bd:sembrar`       | Cuentas y cursos de prueba (F02); correrlo otra vez regresa al estado inicial |
+| `npm run sesiones:expirar` | Expira las sesiones, para probar el aviso de sesión terminada (F01)           |
 
 ## Contribuir
 

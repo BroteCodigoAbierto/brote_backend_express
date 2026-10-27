@@ -36,7 +36,14 @@ src/
 prisma/
   schema.prisma      modelos (se agregan con cada feature)
   migrations/        migraciones (se versionan)
+scripts/             herramientas de desarrollo para la validación manual
+  expirar-sesiones.ts  npm run sesiones:expirar (F01)
+  sembrar-cursos.ts    npm run bd:sembrar: cuentas y cursos de prueba (F02), con
+  datos-prueba.ts      los datos que usa sembrar-cursos.ts
 ```
+
+Después de `npm run bd:migrar`, corre `npm run bd:generar`: en Prisma 7,
+`migrate dev` ya no regenera el cliente.
 
 ## Reglas
 
