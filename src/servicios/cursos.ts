@@ -1,6 +1,13 @@
 import { bd } from "../config/bd.ts";
 import { Prisma } from "../generado/prisma/client.ts";
-import { LIMITES_CATALOGO, type RespuestaCatalogo, type ResumenCurso } from "../tipos/contrato.ts";
+import { ErrorApi } from "../middleware/errores.ts";
+import {
+  LIMITES_CATALOGO,
+  MENSAJES_CATALOGO,
+  type DetalleCurso,
+  type RespuestaCatalogo,
+  type ResumenCurso,
+} from "../tipos/contrato.ts";
 import { crearCursor, type ConsultaCatalogo, type PosicionCurso } from "../validacion/catalogo.ts";
 
 // Catálogo de cursos publicados (spec F02). La búsqueda y el orden se hacen en
@@ -86,4 +93,39 @@ export async function traerCatalogo({
   const ultimo = cursos.at(-1);
   const siguiente = filas.length > porCarga && ultimo ? crearCursor(ultimo) : null;
   return { cursos: cursos.map(aResumenCurso), siguiente };
+}
+
+const seleccionDetalle = {
+  id: true,
+  titulo: true,
+  descripcion: true,
+  autor: { select: { id: true, name: true } },
+  lecciones: {
+    orderBy: { posicion: "asc" },
+    select: { id: true, titulo: true, posicion: true },
+  },
+} satisfies Prisma.CursoSelect;
+
+type CursoConLecciones = Prisma.CursoGetPayload<{ select: typeof seleccionDetalle }>;
+
+function aDetalleCurso(curso: CursoConLecciones): DetalleCurso {
+  return {
+    id: curso.id,
+    titulo: curso.titulo,
+    descripcion: curso.descripcion,
+    autor: { id: curso.autor.id, nombre: curso.autor.name },
+    cantidadLecciones: curso.lecciones.length,
+    lecciones: curso.lecciones,
+  };
+}
+
+// Un curso sin publicar responde igual que uno que no existe, para no revelar
+// que existe (spec F02, "Casos de error").
+export async function traerCursoPublicado(id: string): Promise<DetalleCurso> {
+  const curso = await bd.curso.findFirst({
+    where: { id, publicado: true },
+    select: seleccionDetalle,
+  });
+  if (!curso) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
+  return aDetalleCurso(curso);
 }
