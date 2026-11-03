@@ -88,8 +88,8 @@ model Verification {
 }
 
 // ---------------------------------------------------------------------------
-// Cursos (F02). Solo lo que usa el catálogo: las actividades de la lección
-// llegan con F03, y los límites del título y la descripción con F05.
+// Cursos (F02) y actividades de las lecciones (F03). Los límites del título
+// y la descripción llegan con F05.
 // ---------------------------------------------------------------------------
 
 model Curso {
@@ -115,6 +115,8 @@ model Leccion {
   curso         Curso    @relation(fields: [idCurso], references: [id], onDelete: Cascade)
   titulo        String
   posicion      Int // 1, 2, 3, ... dentro del curso
+  // F03: lista de Actividad del contrato, en orden; solo se escribe después de validarActividades
+  actividades   Json     @default("[]")
   creadoEn      DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
