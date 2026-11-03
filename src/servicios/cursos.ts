@@ -9,6 +9,7 @@ import {
   type ResumenCurso,
 } from "../tipos/contrato.ts";
 import { crearCursor, type ConsultaCatalogo, type PosicionCurso } from "../validacion/catalogo.ts";
+import { aProgresoLeccion } from "./progreso.ts";
 
 // Catálogo de cursos publicados (spec F02). La búsqueda y el orden se hacen en
 // PostgreSQL con unaccent, en una consulta propia porque Prisma no sabe quitar
@@ -95,18 +96,32 @@ export async function traerCatalogo({
   return { cursos: cursos.map(aResumenCurso), siguiente };
 }
 
-const seleccionDetalle = {
-  id: true,
-  titulo: true,
-  descripcion: true,
-  autor: { select: { id: true, name: true } },
-  lecciones: {
-    orderBy: { posicion: "asc" },
-    select: { id: true, titulo: true, posicion: true },
-  },
-} satisfies Prisma.CursoSelect;
+// Cada lección trae el progreso de quien pregunta, en la misma consulta, para
+// que el detalle no aparezca primero sin avance (spec F04, research, punto 5).
+function seleccionDetalle(idUsuario: string) {
+  return {
+    id: true,
+    titulo: true,
+    descripcion: true,
+    autor: { select: { id: true, name: true } },
+    lecciones: {
+      orderBy: { posicion: "asc" },
+      select: {
+        id: true,
+        titulo: true,
+        posicion: true,
+        progresos: {
+          where: { idUsuario },
+          select: { aciertos: true, preguntas: true, completadaEn: true },
+        },
+      },
+    },
+  } satisfies Prisma.CursoSelect;
+}
 
-type CursoConLecciones = Prisma.CursoGetPayload<{ select: typeof seleccionDetalle }>;
+type CursoConLecciones = Prisma.CursoGetPayload<{
+  select: ReturnType<typeof seleccionDetalle>;
+}>;
 
 function aDetalleCurso(curso: CursoConLecciones): DetalleCurso {
   return {
@@ -115,16 +130,22 @@ function aDetalleCurso(curso: CursoConLecciones): DetalleCurso {
     descripcion: curso.descripcion,
     autor: { id: curso.autor.id, nombre: curso.autor.name },
     cantidadLecciones: curso.lecciones.length,
-    lecciones: curso.lecciones,
+    lecciones: curso.lecciones.map(({ id, titulo, posicion, progresos }) => ({
+      id,
+      titulo,
+      posicion,
+      // a lo sumo hay una fila: la clave es (alumno, lección)
+      progreso: progresos[0] ? aProgresoLeccion(progresos[0]) : null,
+    })),
   };
 }
 
 // Un curso sin publicar responde igual que uno que no existe, para no revelar
 // que existe (spec F02, "Casos de error").
-export async function traerCursoPublicado(id: string): Promise<DetalleCurso> {
+export async function traerCursoPublicado(id: string, idUsuario: string): Promise<DetalleCurso> {
   const curso = await bd.curso.findFirst({
     where: { id, publicado: true },
-    select: seleccionDetalle,
+    select: seleccionDetalle(idUsuario),
   });
   if (!curso) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
   return aDetalleCurso(curso);
