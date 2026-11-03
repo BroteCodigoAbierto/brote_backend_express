@@ -28,7 +28,7 @@ src/
   config/bd.ts       cliente de Prisma (solo lo importan servicios y config/auth.ts)
   config/auth.ts     Better Auth; NO se monta como handler, se usa con auth.api.*
   rutas/             HTTP: leer y validar la petición, responder. Un archivo por recurso
-  validacion/        funciones que validan cuerpos con las constantes del contrato
+  validacion/        funciones que validan cuerpos (y actividades) con las constantes del contrato
   servicios/         reglas de negocio; aquí se usa Prisma
   middleware/        ErrorApi, manejador central de errores, sesión (requerirSesion)
   tipos/contrato.ts  GENERADO desde brote_specs; no se edita a mano
@@ -38,8 +38,10 @@ prisma/
   migrations/        migraciones (se versionan)
 scripts/             herramientas de desarrollo para la validación manual
   expirar-sesiones.ts  npm run sesiones:expirar (F01)
-  sembrar-cursos.ts    npm run bd:sembrar: cuentas y cursos de prueba (F02), con
+  sembrar-cursos.ts    npm run bd:sembrar: cuentas, cursos y actividades de prueba
+                       (F02, F03); valida las actividades antes de guardarlas
   datos-prueba.ts      los datos que usa sembrar-cursos.ts
+  actividades-prototipo.ts  actividades del prototipo ya convertidas al contrato (F03)
 ```
 
 Después de `npm run bd:migrar`, corre `npm run bd:generar`: en Prisma 7,
