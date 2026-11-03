@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.4.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.5.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -102,8 +102,9 @@ export type ResumenLeccion = {
 };
 
 // El detalle agrega la lista de lecciones, ordenadas por posición.
+// Desde F04, cada lección trae el progreso de quien pregunta.
 export type DetalleCurso = ResumenCurso & {
-  lecciones: ResumenLeccion[];
+  lecciones: LeccionDelCurso[];
 };
 
 export type RespuestaCatalogo = {
@@ -210,4 +211,57 @@ export const LIMITES_ACTIVIDADES = {
 export const MENSAJES_LECCION = {
   // mismo mensaje si la lección no existe, es de otro curso o su curso no está publicado
   leccionNoDisponible: "Esta lección no existe o ya no está disponible.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Progreso (F04)
+// ---------------------------------------------------------------------------
+
+// Qué tipos de actividad son preguntas: cuentan en "Acertaste {a} de {p}" y
+// en el progreso. Al ser un Record, agregar un tipo a `Actividad` obliga a
+// decidir aquí si se califica (principio IV).
+export const CALIFICA_ACTIVIDAD: Record<TipoActividad, boolean> = {
+  teoria: false,
+  tarjeta: false,
+  opcionMultiple: true,
+  completarEspacios: true,
+  preguntaAbierta: true,
+};
+
+// La última vez que el alumno completó una lección.
+export type ProgresoLeccion = {
+  aciertos: number;
+  preguntas: number; // 0 si la lección no tiene preguntas
+  completadaEn: string; // ISO 8601
+};
+
+// Una lección en el detalle del curso, con el progreso de quien pregunta
+// (null si no la ha completado).
+export type LeccionDelCurso = ResumenLeccion & {
+  progreso: ProgresoLeccion | null;
+};
+
+// PUT /cursos/:idCurso/lecciones/:idLeccion/progreso
+export type CuerpoProgresoLeccion = {
+  aciertos: number;
+  preguntas: number;
+};
+
+export type RespuestaProgresoLeccion = {
+  progreso: ProgresoLeccion;
+};
+
+// Un curso con al menos una lección completada por quien pregunta.
+export type CursoEmpezado = ResumenCurso & {
+  leccionesCompletadas: number; // de cantidadLecciones
+  ultimoAvanceEn: string; // ISO 8601: la última lección completada, ordena la lista
+};
+
+export type RespuestaCursosEmpezados = {
+  cursos: CursoEmpezado[]; // del avance más reciente al más antiguo
+};
+
+export const MENSAJES_PROGRESO = {
+  // el cuerpo no es un resultado válido, o no corresponde a la lección
+  resultadoInvalido: "El resultado no corresponde a la lección.",
 } as const;
