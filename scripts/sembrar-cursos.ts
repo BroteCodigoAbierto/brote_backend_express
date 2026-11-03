@@ -1,12 +1,27 @@
-// Herramienta de desarrollo: deja la base con las cuentas y los cursos de prueba
-// de F02 (quickstart de F02, sección 1.1). Correrlo otra vez regresa al estado
-// inicial: borra los cursos de las cuentas @brote.test y los vuelve a crear.
+// Herramienta de desarrollo: deja la base con las cuentas, los cursos y las
+// actividades de prueba de F02 y F03 (quickstart de cada una, sección 1.1).
+// Correrlo otra vez regresa al estado inicial: borra los cursos de las cuentas
+// @brote.test y los vuelve a crear. Si una actividad no pasa
+// validarActividades, falla sin tocar la base.
 //
 //   npm run bd:sembrar
 
 import { auth } from "../src/config/auth.ts";
 import { bd } from "../src/config/bd.ts";
+import { validarActividades } from "../src/validacion/actividades.ts";
 import { CUENTAS_PRUEBA, CURSOS_PRUEBA } from "./datos-prueba.ts";
+
+// Antes de abrir la transacción: si algo está mal, la base ni se toca.
+for (const curso of CURSOS_PRUEBA) {
+  for (const [i, leccion] of curso.lecciones.entries()) {
+    try {
+      validarActividades(leccion.actividades);
+    } catch (error) {
+      const donde = `"${curso.titulo}", lección ${i + 1} ("${leccion.titulo}")`;
+      throw new Error(`${donde}: ${(error as Error).message}`, { cause: error });
+    }
+  }
+}
 
 try {
   // Con Better Auth la contraseña queda con el mismo hash que la de una cuenta
@@ -37,7 +52,11 @@ try {
             publicado: curso.publicado,
             idAutor: idPorCorreo.get(curso.correoAutor)!,
             lecciones: {
-              create: curso.lecciones.map((titulo, i) => ({ titulo, posicion: i + 1 })),
+              create: curso.lecciones.map(({ titulo, actividades }, i) => ({
+                titulo,
+                posicion: i + 1,
+                actividades,
+              })),
             },
           },
         });
@@ -47,7 +66,13 @@ try {
   );
 
   const publicados = CURSOS_PRUEBA.filter((curso) => curso.publicado).length;
-  console.log(`${CURSOS_PRUEBA.length} cursos de prueba creados; ${publicados} publicados`);
+  const actividades = CURSOS_PRUEBA.flatMap((curso) => curso.lecciones).reduce(
+    (total, leccion) => total + leccion.actividades.length,
+    0,
+  );
+  console.log(
+    `${CURSOS_PRUEBA.length} cursos de prueba creados; ${publicados} publicados; ${actividades} actividades`,
+  );
 } finally {
   await bd.$disconnect();
 }
