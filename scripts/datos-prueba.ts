@@ -1,11 +1,15 @@
-// Cuentas y cursos de prueba de F02 (brote_specs, quickstart de F02, sección
-// 1.1). Los cuatro cursos publicados copian tal cual el título, la descripción
-// y los títulos de las lecciones de brote_specs/referencia/cursos-prototipo/;
-// sus actividades llegan con F03. Los demás solo se publican mientras se valida
-// el criterio que los pide, para no cambiar los resultados de los otros.
+// Cuentas y cursos de prueba de F02 y F03 (brote_specs, quickstart de F02,
+// sección 1.1, y de F03, sección 1.1). Los cuatro cursos publicados copian tal
+// cual el título, la descripción y los títulos de las lecciones de
+// brote_specs/referencia/cursos-prototipo/, y sus actividades salen de
+// actividades-prototipo.ts. Los demás solo se publican mientras se valida el
+// criterio que los pide, para no cambiar los resultados de los otros.
 //
 // Ningún curso extra usa en su texto las palabras de los criterios de búsqueda
 // (git, japones, programacion, flex, sencill, cocina, equipo, brote).
+
+import type { Actividad } from "../src/tipos/contrato.ts";
+import { ACTIVIDADES_PROTOTIPO } from "./actividades-prototipo.ts";
 
 export type CuentaPrueba = { correo: string; nombre: string; contrasena: string };
 
@@ -14,8 +18,13 @@ export type CursoPrueba = {
   titulo: string;
   descripcion: string;
   publicado: boolean;
-  lecciones: string[]; // títulos, en orden
+  lecciones: LeccionPrueba[]; // en orden
 };
+
+export type LeccionPrueba = { titulo: string; actividades: Actividad[] };
+
+// Lo que sale de un manifest.json del prototipo: las lecciones solo con su título.
+type CursoManifiesto = Omit<CursoPrueba, "lecciones"> & { lecciones: string[] };
 
 const AUTOR = "autor@brote.test";
 // se llama igual que AUTOR: el criterio de buscar por autor lo necesita
@@ -26,11 +35,33 @@ export const CUENTAS_PRUEBA: CuentaPrueba[] = [
   { correo: AUTOR_2, nombre: "Equipo Brote", contrasena: "brote12345" },
 ];
 
-function leccionesNumeradas(cantidad: number): string[] {
-  return Array.from({ length: cantidad }, (_, i) => `Lección ${i + 1}`);
+function sinActividades(titulos: string[]): LeccionPrueba[] {
+  return titulos.map((titulo) => ({ titulo, actividades: [] }));
 }
 
-const prototipo: CursoPrueba[] = [
+function leccionesNumeradas(cantidad: number): LeccionPrueba[] {
+  return sinActividades(Array.from({ length: cantidad }, (_, i) => `Lección ${i + 1}`));
+}
+
+// Cada lección del prototipo con sus actividades, en el mismo orden.
+function conActividades({ titulo, lecciones, ...curso }: CursoManifiesto): CursoPrueba {
+  const actividades = ACTIVIDADES_PROTOTIPO[titulo];
+  if (actividades?.length !== lecciones.length) {
+    throw new Error(
+      `actividades-prototipo.ts no tiene las ${lecciones.length} lecciones de "${titulo}"`,
+    );
+  }
+  return {
+    ...curso,
+    titulo,
+    lecciones: lecciones.map((tituloLeccion, i) => ({
+      titulo: tituloLeccion,
+      actividades: actividades[i],
+    })),
+  };
+}
+
+const manifiestos: CursoManifiesto[] = [
   {
     correoAutor: AUTOR,
     titulo: "Git esencial",
@@ -84,6 +115,59 @@ const prototipo: CursoPrueba[] = [
   },
 ];
 
+const prototipo = manifiestos.map(conActividades);
+
+// Textos con etiquetas en todos los campos (spec F03, criterio de "Contenido y acceso")
+const HTML = "<b>hola</b> <script>alert(1)</script>";
+
+// F03: un curso para los criterios que el prototipo no cubre. No se llama
+// "Curso de prueba ..." porque la consulta C2 de F02 publica esos.
+const actividadesDePrueba: CursoPrueba = {
+  correoAutor: AUTOR,
+  titulo: "Actividades de prueba",
+  descripcion: "Curso para comprobar a mano los cinco tipos de actividad.",
+  publicado: false,
+  lecciones: [
+    {
+      titulo: "Respuestas con acentos",
+      actividades: [
+        {
+          tipo: "completarEspacios",
+          texto: "Sinónimo de pieza musical: ___",
+          espacios: [{ aceptadas: ["canción", "tema"] }],
+        },
+      ],
+    },
+    {
+      titulo: "Textos con etiquetas",
+      actividades: [
+        {
+          tipo: "teoria",
+          titulo: `Teoría ${HTML}`,
+          texto: `Párrafo con ${HTML}.\n\nOtro párrafo con ${HTML}.`,
+          codigo: `const texto = "${HTML}";`,
+          puntosClave: [`Punto con ${HTML}`],
+        },
+        { tipo: "tarjeta", frente: `Frente ${HTML}`, reverso: `Reverso ${HTML}` },
+        {
+          tipo: "opcionMultiple",
+          pregunta: `Pregunta ${HTML}`,
+          codigo: `<p>${HTML}</p>`,
+          opciones: [{ texto: `Opción ${HTML}` }, { texto: "Otra opción <i>sin cursiva</i>" }],
+          correcta: 0,
+        },
+        {
+          tipo: "completarEspacios",
+          texto: `Texto ${HTML} con un espacio: ___`,
+          espacios: [{ aceptadas: ["<b>hola</b>"] }],
+        },
+        { tipo: "preguntaAbierta", pregunta: `Pregunta ${HTML}`, solucion: `Solución ${HTML}` },
+      ],
+    },
+    { titulo: "Lección sin actividades", actividades: [] },
+  ],
+};
+
 const extras: CursoPrueba[] = [
   {
     correoAutor: AUTOR,
@@ -112,7 +196,7 @@ const extras: CursoPrueba[] = [
     titulo: "Una sola lección",
     descripcion: "Un curso corto, de una sola lección.",
     publicado: false,
-    lecciones: ["Única lección"],
+    lecciones: sinActividades(["Única lección"]),
   },
   {
     correoAutor: AUTOR,
@@ -134,7 +218,7 @@ const extras: CursoPrueba[] = [
     titulo: "Huerto en casa",
     descripcion: "Siembra tus primeras hortalizas en macetas.",
     publicado: false,
-    lecciones: ["Elegir las macetas", "Sembrar"],
+    lecciones: sinActividades(["Elegir las macetas", "Sembrar"]),
   },
 ];
 
@@ -147,4 +231,9 @@ const genericos: CursoPrueba[] = Array.from({ length: 21 }, (_, i) => ({
   lecciones: leccionesNumeradas((i % 3) + 1),
 }));
 
-export const CURSOS_PRUEBA: CursoPrueba[] = [...prototipo, ...extras, ...genericos];
+export const CURSOS_PRUEBA: CursoPrueba[] = [
+  ...prototipo,
+  ...extras,
+  actividadesDePrueba,
+  ...genericos,
+];
