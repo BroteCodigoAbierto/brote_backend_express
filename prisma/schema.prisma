@@ -24,16 +24,17 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String    @id
+  id            String     @id
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String     @unique
+  emailVerified Boolean    @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
   sessions      Session[]
   accounts      Account[]
   cursos        Curso[] // F02: cursos de los que es autor (no crea columnas)
+  progresos     Progreso[] // F04: lecciones completadas (no crea columnas)
 
   @@map("user")
 }
@@ -110,16 +111,39 @@ model Curso {
 }
 
 model Leccion {
-  id            String   @id @default(uuid(7))
-  idCurso       String   @map("id_curso")
-  curso         Curso    @relation(fields: [idCurso], references: [id], onDelete: Cascade)
+  id            String     @id @default(uuid(7))
+  idCurso       String     @map("id_curso")
+  curso         Curso      @relation(fields: [idCurso], references: [id], onDelete: Cascade)
   titulo        String
   posicion      Int // 1, 2, 3, ... dentro del curso
   // F03: lista de Actividad del contrato, en orden; solo se escribe después de validarActividades
-  actividades   Json     @default("[]")
-  creadoEn      DateTime @default(now()) @map("creado_en")
-  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+  actividades   Json       @default("[]")
+  creadoEn      DateTime   @default(now()) @map("creado_en")
+  actualizadoEn DateTime   @updatedAt @map("actualizado_en")
+  progresos     Progreso[] // F04 (no crea columnas)
 
   @@unique([idCurso, posicion])
   @@map("leccion")
+}
+
+// ---------------------------------------------------------------------------
+// Progreso (F04): a lo sumo una fila por alumno y lección, con el resultado de
+// la última vez que la completó. La migración agrega un CHECK
+// (0 <= aciertos <= preguntas) que Prisma no sabe declarar.
+// ---------------------------------------------------------------------------
+
+model Progreso {
+  idUsuario    String   @map("id_usuario")
+  usuario      User     @relation(fields: [idUsuario], references: [id], onDelete: Cascade)
+  idLeccion    String   @map("id_leccion")
+  leccion      Leccion  @relation(fields: [idLeccion], references: [id], onDelete: Cascade)
+  aciertos     Int
+  preguntas    Int
+  // la última vez que la completó: ordena "Mis cursos" y "Sigue aprendiendo"
+  completadaEn DateTime @default(now()) @map("completada_en")
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  @@id([idUsuario, idLeccion])
+  @@index([idLeccion])
+  @@map("progreso")
 }
