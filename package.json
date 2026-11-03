@@ -28,6 +28,7 @@
     "bd:migrar": "prisma migrate dev",
     "bd:generar": "prisma generate",
     "bd:estudio": "prisma studio",
+    "bd:sembrar": "node --env-file-if-exists=.env scripts/sembrar-cursos.ts",
     "sesiones:expirar": "node --env-file-if-exists=.env scripts/expirar-sesiones.ts"
   },
   "dependencies": {

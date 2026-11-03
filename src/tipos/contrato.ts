@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.2.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.3.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -75,4 +75,56 @@ export const MENSAJES_CUENTA = {
   contrasenaLarga: "La contraseña puede tener hasta 128 caracteres.",
   credencialesIncorrectas: "Correo o contraseña incorrectos.",
   sesionTerminada: "Tu sesión terminó. Vuelve a entrar.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Catálogo de cursos (F02)
+// ---------------------------------------------------------------------------
+
+export type AutorCurso = {
+  id: string;
+  nombre: string; // nombre para mostrar actual del usuario
+};
+
+// Lo que muestra la tarjeta de un curso en el catálogo.
+export type ResumenCurso = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  autor: AutorCurso;
+  cantidadLecciones: number;
+};
+
+export type ResumenLeccion = {
+  id: string;
+  titulo: string;
+  posicion: number; // 1, 2, 3, ... en el orden del curso
+};
+
+// El detalle agrega la lista de lecciones, ordenadas por posición.
+export type DetalleCurso = ResumenCurso & {
+  lecciones: ResumenLeccion[];
+};
+
+export type RespuestaCatalogo = {
+  cursos: ResumenCurso[];
+  // se manda tal cual en ?despues= para pedir los siguientes; null si ya no hay más
+  siguiente: string | null;
+};
+
+export type RespuestaCurso = {
+  curso: DetalleCurso;
+};
+
+// Longitud de la búsqueda en caracteres Unicode: Array.from(texto).length
+export const LIMITES_CATALOGO = {
+  busquedaMax: 100,
+  cursosPorCarga: 10,
+} as const;
+
+export const MENSAJES_CATALOGO = {
+  busquedaLarga: "La búsqueda puede tener hasta 100 caracteres.",
+  cargaInvalida: "No se pudieron cargar más cursos. Vuelve a buscar.",
+  // mismo mensaje si el curso no existe o no está publicado
+  cursoNoDisponible: "Este curso no existe o ya no está disponible.",
 } as const;

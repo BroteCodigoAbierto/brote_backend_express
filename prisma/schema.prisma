@@ -33,6 +33,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+  cursos        Curso[] // F02: cursos de los que es autor (no crea columnas)
 
   @@map("user")
 }
@@ -84,4 +85,39 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Cursos (F02). Solo lo que usa el catálogo: las actividades de la lección
+// llegan con F03, y los límites del título y la descripción con F05.
+// ---------------------------------------------------------------------------
+
+model Curso {
+  id            String    @id @default(uuid(7))
+  titulo        String
+  descripcion   String
+  // solo los publicados se ven; lo cambia un administrador en la base (decisión 0014)
+  publicado     Boolean   @default(false)
+  idAutor       String    @map("id_autor")
+  // borrar cuentas está fuera del MVP: un autor con cursos no se puede borrar
+  autor         User      @relation(fields: [idAutor], references: [id], onDelete: Restrict)
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  lecciones     Leccion[]
+
+  @@index([idAutor])
+  @@map("curso")
+}
+
+model Leccion {
+  id            String   @id @default(uuid(7))
+  idCurso       String   @map("id_curso")
+  curso         Curso    @relation(fields: [idCurso], references: [id], onDelete: Cascade)
+  titulo        String
+  posicion      Int // 1, 2, 3, ... dentro del curso
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  @@unique([idCurso, posicion])
+  @@map("leccion")
 }
