@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.3.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.4.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -127,4 +127,87 @@ export const MENSAJES_CATALOGO = {
   cargaInvalida: "No se pudieron cargar más cursos. Vuelve a buscar.",
   // mismo mensaje si el curso no existe o no está publicado
   cursoNoDisponible: "Este curso no existe o ya no está disponible.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Lecciones y actividades (F03)
+// ---------------------------------------------------------------------------
+
+// Cada tipo de actividad es una variante identificada por `tipo`
+// (constitución, principio IV). Agregar un tipo es: su variante aquí, su
+// validación en el backend y su componente en la web y en el móvil.
+
+export type ActividadTeoria = {
+  tipo: "teoria";
+  titulo?: string;
+  texto: string; // párrafos separados por un renglón en blanco
+  codigo?: string; // bloque de código; las líneas con +, - o @@ se leen como diff
+  puntosClave?: string[];
+};
+
+export type ActividadTarjeta = {
+  tipo: "tarjeta";
+  frente: string;
+  reverso: string;
+};
+
+// Una opción es un texto o un símbolo que se muestra en grande (p. ej. "あ").
+export type OpcionRespuesta = { texto: string } | { simbolo: string };
+
+export type ActividadOpcionMultiple = {
+  tipo: "opcionMultiple";
+  pregunta: string;
+  codigo?: string;
+  opciones: OpcionRespuesta[]; // en el orden del autor; los clientes las mezclan
+  correcta: number; // índice en `opciones`
+};
+
+export type EspacioRespuesta = {
+  aceptadas: string[]; // la primera es la que se muestra como respuesta esperada
+};
+
+export type ActividadCompletarEspacios = {
+  tipo: "completarEspacios";
+  texto: string; // cada MARCA_ESPACIO es un espacio, en orden
+  espacios: EspacioRespuesta[]; // uno por cada MARCA_ESPACIO del texto
+};
+
+export type ActividadPreguntaAbierta = {
+  tipo: "preguntaAbierta";
+  pregunta: string;
+  solucion: string;
+};
+
+export type Actividad =
+  | ActividadTeoria
+  | ActividadTarjeta
+  | ActividadOpcionMultiple
+  | ActividadCompletarEspacios
+  | ActividadPreguntaAbierta;
+
+export type TipoActividad = Actividad["tipo"];
+
+// La lección que se cursa: lo del resumen más sus actividades, en orden.
+export type DetalleLeccion = ResumenLeccion & {
+  actividades: Actividad[];
+};
+
+export type RespuestaLeccion = {
+  leccion: DetalleLeccion;
+};
+
+// Marca de un espacio dentro de ActividadCompletarEspacios.texto
+export const MARCA_ESPACIO = "___";
+
+// Longitudes en caracteres Unicode: Array.from(texto).length
+export const LIMITES_ACTIVIDADES = {
+  opcionesMin: 2,
+  opcionesMax: 9, // en la web se eligen con las teclas 1 a 9
+  respuestaEspacioMax: 100,
+  respuestaAbiertaMax: 2000,
+} as const;
+
+export const MENSAJES_LECCION = {
+  // mismo mensaje si la lección no existe, es de otro curso o su curso no está publicado
+  leccionNoDisponible: "Esta lección no existe o ya no está disponible.",
 } as const;
