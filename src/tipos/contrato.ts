@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.5.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.6.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -206,6 +206,21 @@ export const LIMITES_ACTIVIDADES = {
   opcionesMax: 9, // en la web se eligen con las teclas 1 a 9
   respuestaEspacioMax: 100,
   respuestaAbiertaMax: 2000,
+  // lo que escribe el autor (F05)
+  tituloMax: 100,
+  textoMax: 5000,
+  codigoMax: 2000,
+  puntosClaveMax: 10,
+  puntoClaveMax: 200,
+  frenteMax: 200,
+  reversoMax: 1000,
+  preguntaMax: 500,
+  opcionTextoMax: 200,
+  opcionSimboloMax: 4,
+  textoEspaciosMax: 2000,
+  espaciosMax: 20,
+  aceptadasMax: 10,
+  solucionMax: 2000,
 } as const;
 
 export const MENSAJES_LECCION = {
@@ -264,4 +279,113 @@ export type RespuestaCursosEmpezados = {
 export const MENSAJES_PROGRESO = {
   // el cuerpo no es un resultado válido, o no corresponde a la lección
   resultadoInvalido: "El resultado no corresponde a la lección.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Editor de cursos (F05)
+// ---------------------------------------------------------------------------
+
+// F06 agrega "enRevision".
+export type EstadoCurso = "borrador" | "publicado";
+
+// Un curso en "Cursos que creé".
+export type CursoDelAutor = {
+  id: string;
+  titulo: string;
+  estado: EstadoCurso;
+  cantidadLecciones: number;
+};
+
+export type RespuestaCursosDelAutor = {
+  cursos: CursoDelAutor[]; // del que cambió más recientemente al más antiguo
+};
+
+// POST /editor/cursos y PUT /editor/cursos/:idCurso
+export type CuerpoDatosCurso = {
+  titulo: string;
+  descripcion: string;
+};
+
+// Una lección en el mapa del curso.
+export type LeccionEnMapa = ResumenLeccion & {
+  cantidadActividades: number;
+};
+
+export type CursoEnEditor = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  lecciones: LeccionEnMapa[]; // por posición
+};
+
+export type RespuestaCursoEnEditor = {
+  curso: CursoEnEditor;
+};
+
+// POST /editor/cursos/:idCurso/lecciones
+export type CuerpoNuevaLeccion = {
+  titulo: string;
+};
+
+export type RespuestaLeccionEnMapa = {
+  leccion: LeccionEnMapa;
+};
+
+// PUT /editor/cursos/:idCurso/lecciones-orden
+export type CuerpoOrdenLecciones = {
+  idsLecciones: string[]; // todas las del curso, en el orden nuevo
+};
+
+// La lección que se edita. `version` sube cada vez que se guarda.
+export type LeccionEnEditor = DetalleLeccion & {
+  version: number;
+};
+
+export type RespuestaLeccionEnEditor = {
+  leccion: LeccionEnEditor;
+};
+
+// PUT /editor/cursos/:idCurso/lecciones/:idLeccion
+export type CuerpoGuardarLeccion = {
+  titulo: string;
+  actividades: Actividad[];
+  version: number; // la que el autor abrió
+  reemplazar?: boolean; // true: guarda aunque haya una versión más nueva
+};
+
+// Longitudes en caracteres Unicode: Array.from(texto).length
+export const LIMITES_CURSO = {
+  tituloMax: 100,
+  descripcionMax: 1000,
+  leccionesMax: 100,
+} as const;
+
+export const LIMITES_LECCION = {
+  tituloMax: 100,
+  actividadesMax: 50,
+} as const;
+
+export const MENSAJES_EDITOR = {
+  datosInvalidos: "Revisa los datos marcados.",
+  campoObligatorio: "Este campo es obligatorio.",
+  // solo lo ve quien salta al cliente: los campos no dejan escribir de más
+  textoLargo: "Este texto es más largo de lo permitido.",
+  opcionRepetida: "Esta opción está repetida.",
+  opcionCorrectaFalta: "Elige la opción correcta.",
+  simboloLargo: "Un símbolo puede tener hasta 4 caracteres.",
+  sinEspacios: "Agrega al menos un espacio con ___.",
+  demasiadosEspacios: "El texto puede tener hasta 20 espacios.",
+  gruposDeMas: "Hay más grupos de respuestas que espacios en el texto. Quita los que sobran.",
+  maxLecciones: "Un curso puede tener hasta 100 lecciones.",
+  maxActividades: "Una lección puede tener hasta 50 actividades.",
+  // al abrir (403); al abrir, un 404 usa los mensajes de F02 y F03
+  cursoPublicado: "Este curso ya está publicado y por ahora no se puede editar.",
+  // al escribir (403 y 404)
+  cursoPublicadoAlGuardar:
+    "Este curso ya está publicado y por ahora no se puede editar. Tus cambios no se guardaron.",
+  cursoEliminado: "Este curso ya no existe. Tus cambios no se guardaron.",
+  leccionEliminada: "Esta lección ya no existe. Tus cambios no se guardaron.",
+  // 409
+  versionMasNueva: "Se guardó una versión más nueva de esta lección.",
+  ordenDesactualizado: "El orden no coincide con las lecciones del curso.",
 } as const;

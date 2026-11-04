@@ -118,6 +118,8 @@ model Leccion {
   posicion      Int // 1, 2, 3, ... dentro del curso
   // F03: lista de Actividad del contrato, en orden; solo se escribe después de validarActividades
   actividades   Json       @default("[]")
+  // sube cada vez que se guarda la lección; reordenar no la cambia (spec F05)
+  version       Int        @default(1)
   creadoEn      DateTime   @default(now()) @map("creado_en")
   actualizadoEn DateTime   @updatedAt @map("actualizado_en")
   progresos     Progreso[] // F04 (no crea columnas)

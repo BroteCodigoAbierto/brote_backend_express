@@ -5,15 +5,26 @@ import {
   type TipoActividad,
 } from "../tipos/contrato.ts";
 
-// Forma de las actividades de una lección (brote_specs, data-model de F03).
-// La columna leccion.actividades no la comprueba la base: solo se escribe
-// después de pasar por aquí. En F03 la usa el script de datos de prueba; el
-// editor (F05) y la importación (F07) la envolverán en ErrorApi(400, ...).
+// Forma de las actividades de una lección (brote_specs, data-model de F03 y
+// F05). La columna leccion.actividades no la comprueba la base: solo se escribe
+// después de pasar por aquí. La usan el script de datos de prueba y el editor
+// (validacion/editor.ts); la importación (F07) la envolverá igual.
 
 type Objeto = Record<string, unknown>;
 
-// Error con la posición (desde 1), el tipo y el campo que falló.
+// Lo que falló dentro de una actividad; validarActividades le agrega cuál fue.
 class ErrorActividad extends Error {}
+
+// El mensaje dice la posición (desde 1), el tipo y el campo que falló; `indice`
+// (desde 0) es para señalar la actividad sin tener que leerlo de ese texto.
+export class ErrorActividades extends Error {
+  indice: number;
+
+  constructor(indice: number, mensaje: string, opciones?: ErrorOptions) {
+    super(mensaje, opciones);
+    this.indice = indice;
+  }
+}
 
 function esObjeto(valor: unknown): valor is Objeto {
   return typeof valor === "object" && valor !== null && !Array.isArray(valor);
@@ -28,14 +39,21 @@ function esTextoNoVacio(valor: unknown): valor is string {
   return typeof valor === "string" && valor.trim() !== "";
 }
 
-function textoObligatorio(objeto: Objeto, campo: string) {
-  if (!esTextoNoVacio(objeto[campo])) throw new ErrorActividad(`falta ${campo} o está vacío`);
+function comprobarLargo(texto: string, campo: string, maximo: number) {
+  if (largo(texto) > maximo) throw new ErrorActividad(`${campo}: hasta ${maximo} caracteres`);
 }
 
-function textoOpcional(objeto: Objeto, campo: string) {
-  if (campo in objeto && !esTextoNoVacio(objeto[campo])) {
-    throw new ErrorActividad(`${campo} está vacío`);
-  }
+function textoObligatorio(objeto: Objeto, campo: string, maximo: number) {
+  const texto = objeto[campo];
+  if (!esTextoNoVacio(texto)) throw new ErrorActividad(`falta ${campo} o está vacío`);
+  comprobarLargo(texto, campo, maximo);
+}
+
+function textoOpcional(objeto: Objeto, campo: string, maximo: number) {
+  if (!(campo in objeto)) return;
+  const texto = objeto[campo];
+  if (!esTextoNoVacio(texto)) throw new ErrorActividad(`${campo} está vacío`);
+  comprobarLargo(texto, campo, maximo);
 }
 
 // Un campo de más es casi siempre un error de dedo ("puntoClave"): mejor
@@ -47,21 +65,27 @@ function soloCampos(objeto: Objeto, permitidos: string[]) {
 
 function validarTeoria(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "titulo", "texto", "codigo", "puntosClave"]);
-  textoOpcional(actividad, "titulo");
-  textoObligatorio(actividad, "texto");
-  textoOpcional(actividad, "codigo");
+  textoOpcional(actividad, "titulo", LIMITES_ACTIVIDADES.tituloMax);
+  textoObligatorio(actividad, "texto", LIMITES_ACTIVIDADES.textoMax);
+  textoOpcional(actividad, "codigo", LIMITES_ACTIVIDADES.codigoMax);
   if ("puntosClave" in actividad) {
     const puntos = actividad.puntosClave;
     if (!Array.isArray(puntos) || puntos.length === 0 || !puntos.every(esTextoNoVacio)) {
       throw new ErrorActividad("puntosClave, si está, debe tener al menos un texto no vacío");
     }
+    if (puntos.length > LIMITES_ACTIVIDADES.puntosClaveMax) {
+      throw new ErrorActividad(`puntosClave: hasta ${LIMITES_ACTIVIDADES.puntosClaveMax}`);
+    }
+    puntos.forEach((punto) =>
+      comprobarLargo(punto, "puntosClave", LIMITES_ACTIVIDADES.puntoClaveMax),
+    );
   }
 }
 
 function validarTarjeta(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "frente", "reverso"]);
-  textoObligatorio(actividad, "frente");
-  textoObligatorio(actividad, "reverso");
+  textoObligatorio(actividad, "frente", LIMITES_ACTIVIDADES.frenteMax);
+  textoObligatorio(actividad, "reverso", LIMITES_ACTIVIDADES.reversoMax);
 }
 
 function validarOpcion(opcion: unknown, indice: number) {
@@ -70,18 +94,36 @@ function validarOpcion(opcion: unknown, indice: number) {
     Object.keys(opcion).length === 1 &&
     (esTextoNoVacio(opcion.texto) || esTextoNoVacio(opcion.simbolo));
   if (!valida) throw new ErrorActividad(`opción ${indice + 1}: debe ser { texto } o { simbolo }`);
+  if ("simbolo" in opcion) {
+    comprobarLargo(opcion.simbolo as string, "simbolo", LIMITES_ACTIVIDADES.opcionSimboloMax);
+  } else {
+    comprobarLargo(opcion.texto as string, "texto", LIMITES_ACTIVIDADES.opcionTextoMax);
+  }
+}
+
+// Todas de texto o todas de símbolo, y sin repetirse: se comparan recortadas,
+// respetando las mayúsculas (spec F05, "Opción múltiple"). Ya pasaron por
+// validarOpcion.
+function compararOpciones(opciones: Objeto[]) {
+  const conSimbolo = opciones.filter((opcion) => "simbolo" in opcion).length;
+  if (conSimbolo !== 0 && conSimbolo !== opciones.length) {
+    throw new ErrorActividad("opciones: todas de texto o todas de símbolo");
+  }
+  const textos = opciones.map((opcion) => ((opcion.texto ?? opcion.simbolo) as string).trim());
+  if (new Set(textos).size !== textos.length) throw new ErrorActividad("opciones repetidas");
 }
 
 function validarOpcionMultiple(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "pregunta", "codigo", "opciones", "correcta"]);
-  textoObligatorio(actividad, "pregunta");
-  textoOpcional(actividad, "codigo");
+  textoObligatorio(actividad, "pregunta", LIMITES_ACTIVIDADES.preguntaMax);
+  textoOpcional(actividad, "codigo", LIMITES_ACTIVIDADES.codigoMax);
   const { opciones, correcta } = actividad;
   const { opcionesMin, opcionesMax } = LIMITES_ACTIVIDADES;
   if (!Array.isArray(opciones) || opciones.length < opcionesMin || opciones.length > opcionesMax) {
     throw new ErrorActividad(`opciones: entre ${opcionesMin} y ${opcionesMax}`);
   }
   opciones.forEach(validarOpcion);
+  compararOpciones(opciones as Objeto[]);
   if (
     !Number.isInteger(correcta) ||
     (correcta as number) < 0 ||
@@ -98,22 +140,26 @@ function validarEspacio(espacio: unknown, indice: number) {
     Object.keys(espacio).length === 1 &&
     Array.isArray(aceptadas) &&
     aceptadas.length > 0 &&
+    aceptadas.length <= LIMITES_ACTIVIDADES.aceptadasMax &&
     aceptadas.every(
       (aceptada) =>
         esTextoNoVacio(aceptada) && largo(aceptada) <= LIMITES_ACTIVIDADES.respuestaEspacioMax,
     );
   if (!valido) {
     throw new ErrorActividad(
-      `espacio ${indice + 1}: { aceptadas } con al menos una respuesta no vacía de hasta ${LIMITES_ACTIVIDADES.respuestaEspacioMax} caracteres`,
+      `espacio ${indice + 1}: { aceptadas } con 1 a ${LIMITES_ACTIVIDADES.aceptadasMax} respuestas no vacías de hasta ${LIMITES_ACTIVIDADES.respuestaEspacioMax} caracteres`,
     );
   }
 }
 
 function validarCompletarEspacios(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "texto", "espacios"]);
-  textoObligatorio(actividad, "texto");
+  textoObligatorio(actividad, "texto", LIMITES_ACTIVIDADES.textoEspaciosMax);
   const marcas = (actividad.texto as string).split(MARCA_ESPACIO).length - 1;
   if (marcas === 0) throw new ErrorActividad(`texto sin ningún ${MARCA_ESPACIO}`);
+  if (marcas > LIMITES_ACTIVIDADES.espaciosMax) {
+    throw new ErrorActividad(`texto: hasta ${LIMITES_ACTIVIDADES.espaciosMax} espacios`);
+  }
   const { espacios } = actividad;
   if (!Array.isArray(espacios) || espacios.length !== marcas) {
     throw new ErrorActividad(`espacios: debe haber ${marcas}, uno por cada ${MARCA_ESPACIO}`);
@@ -123,8 +169,8 @@ function validarCompletarEspacios(actividad: Objeto) {
 
 function validarPreguntaAbierta(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "pregunta", "solucion"]);
-  textoObligatorio(actividad, "pregunta");
-  textoObligatorio(actividad, "solucion");
+  textoObligatorio(actividad, "pregunta", LIMITES_ACTIVIDADES.preguntaMax);
+  textoObligatorio(actividad, "solucion", LIMITES_ACTIVIDADES.solucionMax);
 }
 
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
@@ -140,20 +186,22 @@ function esTipoConocido(tipo: unknown): tipo is TipoActividad {
   return typeof tipo === "string" && Object.hasOwn(validadores, tipo);
 }
 
-// Lanza Error("actividad N (tipo): ...") en el primer problema.
+// Lanza ErrorActividades("actividad N (tipo): ...") en el primer problema.
 export function validarActividades(valor: unknown): Actividad[] {
   if (!Array.isArray(valor)) throw new Error("las actividades deben ser una lista");
   valor.forEach((actividad: unknown, indice) => {
     const posicion = `actividad ${indice + 1}`;
     if (!esObjeto(actividad) || !esTipoConocido(actividad.tipo)) {
       const tipo = esObjeto(actividad) ? String(actividad.tipo) : "sin tipo";
-      throw new Error(`${posicion} (${tipo}): tipo desconocido`);
+      throw new ErrorActividades(indice, `${posicion} (${tipo}): tipo desconocido`);
     }
     try {
       validadores[actividad.tipo](actividad);
     } catch (error) {
       if (!(error instanceof ErrorActividad)) throw error;
-      throw new Error(`${posicion} (${actividad.tipo}): ${error.message}`, { cause: error });
+      throw new ErrorActividades(indice, `${posicion} (${actividad.tipo}): ${error.message}`, {
+        cause: error,
+      });
     }
   });
   return valor as Actividad[];
