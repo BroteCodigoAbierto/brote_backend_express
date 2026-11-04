@@ -5,15 +5,26 @@ import {
   type TipoActividad,
 } from "../tipos/contrato.ts";
 
-// Forma de las actividades de una lección (brote_specs, data-model de F03).
-// La columna leccion.actividades no la comprueba la base: solo se escribe
-// después de pasar por aquí. En F03 la usa el script de datos de prueba; el
-// editor (F05) y la importación (F07) la envolverán en ErrorApi(400, ...).
+// Forma de las actividades de una lección (brote_specs, data-model de F03 y
+// F05). La columna leccion.actividades no la comprueba la base: solo se escribe
+// después de pasar por aquí. La usan el script de datos de prueba y el editor
+// (validacion/editor.ts); la importación (F07) la envolverá igual.
 
 type Objeto = Record<string, unknown>;
 
-// Error con la posición (desde 1), el tipo y el campo que falló.
+// Lo que falló dentro de una actividad; validarActividades le agrega cuál fue.
 class ErrorActividad extends Error {}
+
+// El mensaje dice la posición (desde 1), el tipo y el campo que falló; `indice`
+// (desde 0) es para señalar la actividad sin tener que leerlo de ese texto.
+export class ErrorActividades extends Error {
+  indice: number;
+
+  constructor(indice: number, mensaje: string, opciones?: ErrorOptions) {
+    super(mensaje, opciones);
+    this.indice = indice;
+  }
+}
 
 function esObjeto(valor: unknown): valor is Objeto {
   return typeof valor === "object" && valor !== null && !Array.isArray(valor);
@@ -140,20 +151,22 @@ function esTipoConocido(tipo: unknown): tipo is TipoActividad {
   return typeof tipo === "string" && Object.hasOwn(validadores, tipo);
 }
 
-// Lanza Error("actividad N (tipo): ...") en el primer problema.
+// Lanza ErrorActividades("actividad N (tipo): ...") en el primer problema.
 export function validarActividades(valor: unknown): Actividad[] {
   if (!Array.isArray(valor)) throw new Error("las actividades deben ser una lista");
   valor.forEach((actividad: unknown, indice) => {
     const posicion = `actividad ${indice + 1}`;
     if (!esObjeto(actividad) || !esTipoConocido(actividad.tipo)) {
       const tipo = esObjeto(actividad) ? String(actividad.tipo) : "sin tipo";
-      throw new Error(`${posicion} (${tipo}): tipo desconocido`);
+      throw new ErrorActividades(indice, `${posicion} (${tipo}): tipo desconocido`);
     }
     try {
       validadores[actividad.tipo](actividad);
     } catch (error) {
       if (!(error instanceof ErrorActividad)) throw error;
-      throw new Error(`${posicion} (${actividad.tipo}): ${error.message}`, { cause: error });
+      throw new ErrorActividades(indice, `${posicion} (${actividad.tipo}): ${error.message}`, {
+        cause: error,
+      });
     }
   });
   return valor as Actividad[];
