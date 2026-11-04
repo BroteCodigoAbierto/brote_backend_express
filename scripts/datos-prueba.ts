@@ -29,10 +29,15 @@ type CursoManifiesto = Omit<CursoPrueba, "lecciones"> & { lecciones: string[] };
 const AUTOR = "autor@brote.test";
 // se llama igual que AUTOR: el criterio de buscar por autor lo necesita
 const AUTOR_2 = "autor2@brote.test";
+// F05: las dos cuentas sin cursos de la spec. autor2 no sirve: tiene "Huerto en casa"
+const CREADOR = "creador@brote.test";
+const CREADOR_2 = "creador2@brote.test";
 
 export const CUENTAS_PRUEBA: CuentaPrueba[] = [
   { correo: AUTOR, nombre: "Equipo Brote", contrasena: "brote12345" },
   { correo: AUTOR_2, nombre: "Equipo Brote", contrasena: "brote12345" },
+  { correo: CREADOR, nombre: "Cuenta A", contrasena: "brote12345" },
+  { correo: CREADOR_2, nombre: "Cuenta B", contrasena: "brote12345" },
 ];
 
 function sinActividades(titulos: string[]): LeccionPrueba[] {
@@ -122,6 +127,30 @@ const HTML = "<b>hola</b> <script>alert(1)</script>";
 
 // F03: un curso para los criterios que el prototipo no cubre. No se llama
 // "Curso de prueba ..." porque la consulta C2 de F02 publica esos.
+const actividadesConEtiquetas: Actividad[] = [
+  {
+    tipo: "teoria",
+    titulo: `Teoría ${HTML}`,
+    texto: `Párrafo con ${HTML}.\n\nOtro párrafo con ${HTML}.`,
+    codigo: `const texto = "${HTML}";`,
+    puntosClave: [`Punto con ${HTML}`],
+  },
+  { tipo: "tarjeta", frente: `Frente ${HTML}`, reverso: `Reverso ${HTML}` },
+  {
+    tipo: "opcionMultiple",
+    pregunta: `Pregunta ${HTML}`,
+    codigo: `<p>${HTML}</p>`,
+    opciones: [{ texto: `Opción ${HTML}` }, { texto: "Otra opción <i>sin cursiva</i>" }],
+    correcta: 0,
+  },
+  {
+    tipo: "completarEspacios",
+    texto: `Texto ${HTML} con un espacio: ___`,
+    espacios: [{ aceptadas: ["<b>hola</b>"] }],
+  },
+  { tipo: "preguntaAbierta", pregunta: `Pregunta ${HTML}`, solucion: `Solución ${HTML}` },
+];
+
 const actividadesDePrueba: CursoPrueba = {
   correoAutor: AUTOR,
   titulo: "Actividades de prueba",
@@ -140,29 +169,7 @@ const actividadesDePrueba: CursoPrueba = {
     },
     {
       titulo: "Textos con etiquetas",
-      actividades: [
-        {
-          tipo: "teoria",
-          titulo: `Teoría ${HTML}`,
-          texto: `Párrafo con ${HTML}.\n\nOtro párrafo con ${HTML}.`,
-          codigo: `const texto = "${HTML}";`,
-          puntosClave: [`Punto con ${HTML}`],
-        },
-        { tipo: "tarjeta", frente: `Frente ${HTML}`, reverso: `Reverso ${HTML}` },
-        {
-          tipo: "opcionMultiple",
-          pregunta: `Pregunta ${HTML}`,
-          codigo: `<p>${HTML}</p>`,
-          opciones: [{ texto: `Opción ${HTML}` }, { texto: "Otra opción <i>sin cursiva</i>" }],
-          correcta: 0,
-        },
-        {
-          tipo: "completarEspacios",
-          texto: `Texto ${HTML} con un espacio: ___`,
-          espacios: [{ aceptadas: ["<b>hola</b>"] }],
-        },
-        { tipo: "preguntaAbierta", pregunta: `Pregunta ${HTML}`, solucion: `Solución ${HTML}` },
-      ],
+      actividades: actividadesConEtiquetas,
     },
     { titulo: "Lección sin actividades", actividades: [] },
   ],
@@ -211,7 +218,8 @@ const extras: CursoPrueba[] = [
     descripcion:
       "Si ves <b>hola</b> sin negritas y <script>alert(1)</script> como texto, se muestra bien.",
     publicado: false,
-    lecciones: leccionesNumeradas(1),
+    // F05: el único curso con etiquetas en todo, también en las lecciones
+    lecciones: [{ titulo: `Lección ${HTML}`, actividades: actividadesConEtiquetas }],
   },
   {
     correoAutor: AUTOR_2,
@@ -219,6 +227,31 @@ const extras: CursoPrueba[] = [
     descripcion: "Siembra tus primeras hortalizas en macetas.",
     publicado: false,
     lecciones: sinActividades(["Elegir las macetas", "Sembrar"]),
+  },
+  {
+    // F05: el máximo de lecciones de un curso
+    correoAutor: AUTOR,
+    titulo: "Curso con cien lecciones",
+    descripcion: "Tiene todas las lecciones que permite un curso.",
+    publicado: false,
+    lecciones: leccionesNumeradas(100),
+  },
+  {
+    // F05: el máximo de actividades de una lección
+    correoAutor: AUTOR,
+    titulo: "Lección con el máximo",
+    descripcion: "Su lección tiene todas las actividades que permite.",
+    publicado: false,
+    lecciones: [
+      {
+        titulo: "Lección llena",
+        actividades: Array.from({ length: 50 }, (_, i) => ({
+          tipo: "tarjeta" as const,
+          frente: `Frente ${i + 1}`,
+          reverso: `Reverso ${i + 1}`,
+        })),
+      },
+    ],
   },
 ];
 
