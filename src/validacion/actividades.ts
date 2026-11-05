@@ -223,6 +223,50 @@ function validarEmparejar(actividad: Objeto) {
   );
 }
 
+function validarElementoClasificar(elemento: unknown, indice: number, categorias: number) {
+  if (!esObjeto(elemento)) throw new ErrorActividad(`elemento ${indice + 1}: { texto, categoria }`);
+  soloCampos(elemento, ["texto", "categoria"]);
+  textoObligatorio(elemento, "texto", LIMITES_ACTIVIDADES.elementoClasificarMax);
+  const { categoria } = elemento;
+  if (
+    !Number.isInteger(categoria) ||
+    (categoria as number) < 0 ||
+    (categoria as number) >= categorias
+  ) {
+    throw new ErrorActividad(`elemento ${indice + 1}: categoria fuera de rango`);
+  }
+}
+
+function validarClasificar(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "categorias", "elementos"]);
+  textoOpcional(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const { categoriasMin, categoriasMax, elementosClasificarMin, elementosClasificarMax } =
+    LIMITES_ACTIVIDADES;
+  const categorias = listaEntre(actividad.categorias, "categorias", categoriasMin, categoriasMax);
+  const nombres = categorias.map((categoria) =>
+    textoDeLista(categoria, "categorias", LIMITES_ACTIVIDADES.categoriaMax),
+  );
+  textosSinRepetir(nombres, "categorias");
+  const elementos = listaEntre(
+    actividad.elementos,
+    "elementos",
+    elementosClasificarMin,
+    elementosClasificarMax,
+  );
+  elementos.forEach((elemento, indice) =>
+    validarElementoClasificar(elemento, indice, nombres.length),
+  );
+  const validos = elementos as Objeto[];
+  textosSinRepetir(
+    validos.map(({ texto }) => texto as string),
+    "elementos",
+  );
+  const usadas = new Set(validos.map(({ categoria }) => categoria));
+  if (usadas.size !== nombres.length) {
+    throw new ErrorActividad("categorias: cada una necesita al menos un elemento");
+  }
+}
+
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
 const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   teoria: validarTeoria,
@@ -231,6 +275,7 @@ const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   completarEspacios: validarCompletarEspacios,
   preguntaAbierta: validarPreguntaAbierta,
   emparejar: validarEmparejar,
+  clasificar: validarClasificar,
 };
 
 function esTipoConocido(tipo: unknown): tipo is TipoActividad {
