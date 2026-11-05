@@ -267,6 +267,22 @@ function validarClasificar(actividad: Objeto) {
   }
 }
 
+function validarOrdenar(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "elementos"]);
+  textoObligatorio(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const { elementosOrdenarMin, elementosOrdenarMax, elementoOrdenarMax } = LIMITES_ACTIVIDADES;
+  const elementos = listaEntre(
+    actividad.elementos,
+    "elementos",
+    elementosOrdenarMin,
+    elementosOrdenarMax,
+  );
+  textosSinRepetir(
+    elementos.map((elemento) => textoDeLista(elemento, "elementos", elementoOrdenarMax)),
+    "elementos",
+  );
+}
+
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
 const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   teoria: validarTeoria,
@@ -276,6 +292,7 @@ const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   preguntaAbierta: validarPreguntaAbierta,
   emparejar: validarEmparejar,
   clasificar: validarClasificar,
+  ordenar: validarOrdenar,
 };
 
 function esTipoConocido(tipo: unknown): tipo is TipoActividad {
