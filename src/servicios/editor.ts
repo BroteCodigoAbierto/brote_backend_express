@@ -12,6 +12,7 @@ import {
   type CuerpoNuevaLeccion,
   type CursoDelAutor,
   type CursoEnEditor,
+  type EstadoCurso,
   type LeccionEnEditor,
   type LeccionEnMapa,
 } from "../tipos/contrato.ts";
@@ -21,6 +22,15 @@ import {
 // comprueba aquí (brote_specs, research de F05, puntos 2 a 6).
 
 type Transaccion = Prisma.TransactionClient;
+
+type DatosDeEstado = { publicado: boolean; revision: string | null };
+
+// `estado` no se guarda: sale de aquí, y `publicado` manda (brote_specs, research de
+// F06, punto 1).
+function estadoDelCurso({ publicado, revision }: DatosDeEstado): EstadoCurso {
+  if (publicado) return "publicado";
+  return revision === "pendiente" ? "enRevision" : "borrador";
+}
 
 // Toda escritura pasa por aquí: bloquea el curso y comprueba, ya bloqueado, que
 // es de quien llama y que no está publicado. Sin el bloqueo, dos altas a la vez
@@ -71,17 +81,33 @@ async function tocarCurso(tx: Transaccion, idCurso: string) {
 
 // Las actividades se cuentan en la base, para no traerlas todas al mapa.
 async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise<CursoEnEditor> {
-  const { id, titulo, descripcion } = await cliente.curso.findUniqueOrThrow({
-    where: { id: idCurso },
-    select: { id: true, titulo: true, descripcion: true },
-  });
+  const { id, titulo, descripcion, publicado, revision, motivoRechazo } =
+    await cliente.curso.findUniqueOrThrow({
+      where: { id: idCurso },
+      select: {
+        id: true,
+        titulo: true,
+        descripcion: true,
+        publicado: true,
+        revision: true,
+        motivoRechazo: true,
+      },
+    });
   const lecciones = await cliente.$queryRaw<LeccionEnMapa[]>`
     SELECT id, titulo, posicion, jsonb_array_length(actividades) AS "cantidadActividades"
     FROM leccion
     WHERE id_curso = ${idCurso}
     ORDER BY posicion
   `;
-  return { id, titulo, descripcion, lecciones };
+  return {
+    id,
+    titulo,
+    descripcion,
+    estado: estadoDelCurso({ publicado, revision }),
+    revisionRechazada: revision === "rechazada",
+    motivoRechazo,
+    lecciones,
+  };
 }
 
 // Los cursos de quien llama, publicados o no, del que cambió más recientemente
@@ -94,13 +120,15 @@ export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAuto
       id: true,
       titulo: true,
       publicado: true,
+      revision: true,
       _count: { select: { lecciones: true } },
     },
   });
-  return cursos.map(({ id, titulo, publicado, _count }) => ({
+  return cursos.map(({ id, titulo, publicado, revision, _count }) => ({
     id,
     titulo,
-    estado: publicado ? "publicado" : "borrador",
+    estado: estadoDelCurso({ publicado, revision }),
+    revisionRechazada: revision === "rechazada",
     cantidadLecciones: _count.lecciones,
   }));
 }
@@ -113,7 +141,13 @@ export async function crearCurso(
     data: { titulo, descripcion, idAutor },
     select: { id: true, titulo: true, descripcion: true },
   });
-  return { ...curso, lecciones: [] };
+  return {
+    ...curso,
+    estado: "borrador",
+    revisionRechazada: false,
+    motivoRechazo: null,
+    lecciones: [],
+  };
 }
 
 export async function traerCursoEnEditor(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
