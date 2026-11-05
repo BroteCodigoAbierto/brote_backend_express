@@ -194,6 +194,34 @@ export async function borrarCurso(idAutor: string, idCurso: string): Promise<voi
   await conCursoEditable(idAutor, idCurso, (tx) => tx.curso.delete({ where: { id: idCurso } }));
 }
 
+// Se cuenta con lo guardado y con el curso bloqueado: nadie puede vaciar una lección
+// entre esta comprobación y el envío.
+async function comprobarContenido(tx: Transaccion, idCurso: string) {
+  const lecciones = await tx.$queryRaw<{ vacia: boolean }[]>`
+    SELECT jsonb_array_length(actividades) = 0 AS vacia FROM leccion WHERE id_curso = ${idCurso}
+  `;
+  if (lecciones.length === 0) throw new ErrorApi(400, MENSAJES_EDITOR.sinLecciones);
+  const vacias = lecciones.filter(({ vacia }) => vacia).length;
+  if (vacias === 1) throw new ErrorApi(400, MENSAJES_EDITOR.unaLeccionVacia);
+  if (vacias > 1) {
+    throw new ErrorApi(400, MENSAJES_EDITOR.leccionesVacias.replace("{n}", String(vacias)));
+  }
+}
+
+// `update` pone `actualizado_en` con @updatedAt, y eso sube el curso en "Cursos que
+// creé". Las actividades no se revisan: solo se guardan después de validarlas.
+export async function enviarARevision(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "borrador") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    await comprobarContenido(tx, idCurso);
+    await tx.curso.update({
+      where: { id: idCurso },
+      data: { revision: "pendiente", motivoRechazo: null },
+    });
+    return leerCursoEnEditor(tx, idCurso);
+  });
+}
+
 export async function crearLeccion(
   idAutor: string,
   idCurso: string,
