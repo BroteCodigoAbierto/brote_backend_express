@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.6.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.7.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -285,14 +285,14 @@ export const MENSAJES_PROGRESO = {
 // Editor de cursos (F05)
 // ---------------------------------------------------------------------------
 
-// F06 agrega "enRevision".
-export type EstadoCurso = "borrador" | "publicado";
+export type EstadoCurso = "borrador" | "enRevision" | "publicado";
 
 // Un curso en "Cursos que creé".
 export type CursoDelAutor = {
   id: string;
   titulo: string;
   estado: EstadoCurso;
+  revisionRechazada: boolean; // la última revisión se rechazó; se va al enviarlo otra vez
   cantidadLecciones: number;
 };
 
@@ -315,6 +315,9 @@ export type CursoEnEditor = {
   id: string;
   titulo: string;
   descripcion: string;
+  estado: EstadoCurso;
+  revisionRechazada: boolean;
+  motivoRechazo: string | null; // puede haber rechazo sin motivo
   lecciones: LeccionEnMapa[]; // por posición
 };
 
@@ -378,14 +381,23 @@ export const MENSAJES_EDITOR = {
   gruposDeMas: "Hay más grupos de respuestas que espacios en el texto. Quita los que sobran.",
   maxLecciones: "Un curso puede tener hasta 100 lecciones.",
   maxActividades: "Una lección puede tener hasta 50 actividades.",
-  // al abrir (403); al abrir, un 404 usa los mensajes de F02 y F03
-  cursoPublicado: "Este curso ya está publicado y por ahora no se puede editar.",
+  // al abrir una lección (403); al abrir, un 404 usa los mensajes de F02 y F03
+  cursoPublicado: "Este curso está publicado y no se puede editar.",
+  cursoEnRevision: "Este curso está en revisión y no se puede editar.",
   // al escribir (403 y 404)
   cursoPublicadoAlGuardar:
-    "Este curso ya está publicado y por ahora no se puede editar. Tus cambios no se guardaron.",
+    "Este curso está publicado y no se puede editar. Tus cambios no se guardaron.",
+  cursoEnRevisionAlGuardar:
+    "Este curso está en revisión y no se puede editar. Tus cambios no se guardaron.",
   cursoEliminado: "Este curso ya no existe. Tus cambios no se guardaron.",
   leccionEliminada: "Esta lección ya no existe. Tus cambios no se guardaron.",
   // 409
   versionMasNueva: "Se guardó una versión más nueva de esta lección.",
   ordenDesactualizado: "El orden no coincide con las lecciones del curso.",
+  // enviar y retirar (F06): 404, 409 y 400
+  cursoNoExiste: "Este curso ya no existe.",
+  estadoCambiado: "El estado de este curso cambió en otro lugar.",
+  sinLecciones: "No se envió: el curso no tiene lecciones.",
+  unaLeccionVacia: "No se envió: hay 1 lección sin actividades.",
+  leccionesVacias: "No se envió: hay {n} lecciones sin actividades.", // {n} es 2 o más
 } as const;
