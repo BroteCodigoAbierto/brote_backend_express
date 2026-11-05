@@ -32,34 +32,53 @@ function estadoDelCurso({ publicado, revision }: DatosDeEstado): EstadoCurso {
   return revision === "pendiente" ? "enRevision" : "borrador";
 }
 
-// Toda escritura pasa por aquí: bloquea el curso y comprueba, ya bloqueado, que
-// es de quien llama y que no está publicado. Sin el bloqueo, dos altas a la vez
-// calcularían la misma posición, y un curso publicado a media escritura quedaría
-// cambiado sin revisión.
+// Toda acción sobre un curso pasa por aquí: bloquea el curso y comprueba, ya
+// bloqueado, que es de quien llama. Sin el bloqueo, dos altas a la vez calcularían la
+// misma posición, y un curso publicado a media escritura quedaría cambiado sin
+// revisión. Un `UPDATE` a mano del administrador también espera a este bloqueo.
+async function conCursoDelAutor<T>(
+  idAutor: string,
+  idCurso: string,
+  mensajeNoExiste: string,
+  accion: (tx: Transaccion, estado: EstadoCurso) => Promise<T>,
+): Promise<T> {
+  return bd.$transaction(async (tx) => {
+    const [curso] = await tx.$queryRaw<(DatosDeEstado & { idAutor: string })[]>`
+      SELECT id_autor AS "idAutor", publicado, revision FROM curso WHERE id = ${idCurso} FOR UPDATE
+    `;
+    // un curso ajeno responde igual que uno que no existe
+    if (curso?.idAutor !== idAutor) throw new ErrorApi(404, mensajeNoExiste);
+    return accion(tx, estadoDelCurso(curso));
+  });
+}
+
+// Toda escritura en el contenido pasa por aquí. Un curso rechazado es un borrador.
 async function conCursoEditable<T>(
   idAutor: string,
   idCurso: string,
   accion: (tx: Transaccion) => Promise<T>,
 ): Promise<T> {
-  return bd.$transaction(async (tx) => {
-    const [curso] = await tx.$queryRaw<{ idAutor: string; publicado: boolean }[]>`
-      SELECT id_autor AS "idAutor", publicado FROM curso WHERE id = ${idCurso} FOR UPDATE
-    `;
-    // un curso ajeno responde igual que uno que no existe
-    if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_EDITOR.cursoEliminado);
-    if (curso.publicado) throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicadoAlGuardar);
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoEliminado, (tx, estado) => {
+    if (estado === "publicado") {
+      throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicadoAlGuardar);
+    }
+    if (estado === "enRevision") {
+      throw new ErrorApi(403, MENSAJES_EDITOR.cursoEnRevisionAlGuardar);
+    }
     return accion(tx);
   });
 }
 
-// Lo mismo para abrir: sin bloqueo y con los mensajes de abrir.
+// Lo mismo para abrir una lección: sin bloqueo y con los mensajes de abrir.
 async function comprobarCursoAbierto(idAutor: string, idCurso: string) {
   const curso = await bd.curso.findUnique({
     where: { id: idCurso },
-    select: { idAutor: true, publicado: true },
+    select: { idAutor: true, publicado: true, revision: true },
   });
   if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
-  if (curso.publicado) throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicado);
+  const estado = estadoDelCurso(curso);
+  if (estado === "publicado") throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicado);
+  if (estado === "enRevision") throw new ErrorApi(403, MENSAJES_EDITOR.cursoEnRevision);
 }
 
 // PostgreSQL comprueba el índice único de (id_curso, posicion) fila por fila:
@@ -150,8 +169,11 @@ export async function crearCurso(
   };
 }
 
+// Responde en cualquier estado: la pantalla de un curso que no se edita necesita su
+// título y su estado (brote_specs, research de F06, punto 7).
 export async function traerCursoEnEditor(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
-  await comprobarCursoAbierto(idAutor, idCurso);
+  const curso = await bd.curso.findUnique({ where: { id: idCurso }, select: { idAutor: true } });
+  if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
   return leerCursoEnEditor(bd, idCurso);
 }
 
