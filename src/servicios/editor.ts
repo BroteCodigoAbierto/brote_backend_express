@@ -222,6 +222,23 @@ export async function enviarARevision(idAutor: string, idCurso: string): Promise
   });
 }
 
+export async function retirarDeRevision(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "enRevision") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    await tx.curso.update({ where: { id: idCurso }, data: { revision: null } });
+    return leerCursoEnEditor(tx, idCurso);
+  });
+}
+
+// El progreso de los alumnos se queda: vuelve a contar al publicarse otra vez (F04).
+export async function retirarDelCatalogo(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "publicado") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    await tx.curso.update({ where: { id: idCurso }, data: { publicado: false } });
+    return leerCursoEnEditor(tx, idCurso);
+  });
+}
+
 export async function crearLeccion(
   idAutor: string,
   idCurso: string,
