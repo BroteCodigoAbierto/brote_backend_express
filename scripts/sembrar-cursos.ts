@@ -50,6 +50,7 @@ try {
             titulo: curso.titulo,
             descripcion: curso.descripcion,
             publicado: curso.publicado,
+            revision: curso.revision ?? null,
             idAutor: idPorCorreo.get(curso.correoAutor)!,
             lecciones: {
               create: curso.lecciones.map(({ titulo, actividades }, i) => ({
