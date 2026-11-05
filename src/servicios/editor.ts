@@ -12,6 +12,7 @@ import {
   type CuerpoNuevaLeccion,
   type CursoDelAutor,
   type CursoEnEditor,
+  type EstadoCurso,
   type LeccionEnEditor,
   type LeccionEnMapa,
 } from "../tipos/contrato.ts";
@@ -22,34 +23,62 @@ import {
 
 type Transaccion = Prisma.TransactionClient;
 
-// Toda escritura pasa por aquí: bloquea el curso y comprueba, ya bloqueado, que
-// es de quien llama y que no está publicado. Sin el bloqueo, dos altas a la vez
-// calcularían la misma posición, y un curso publicado a media escritura quedaría
-// cambiado sin revisión.
+type DatosDeEstado = { publicado: boolean; revision: string | null };
+
+// `estado` no se guarda: sale de aquí, y `publicado` manda (brote_specs, research de
+// F06, punto 1).
+function estadoDelCurso({ publicado, revision }: DatosDeEstado): EstadoCurso {
+  if (publicado) return "publicado";
+  return revision === "pendiente" ? "enRevision" : "borrador";
+}
+
+// Toda acción sobre un curso pasa por aquí: bloquea el curso y comprueba, ya
+// bloqueado, que es de quien llama. Sin el bloqueo, dos altas a la vez calcularían la
+// misma posición, y un curso publicado a media escritura quedaría cambiado sin
+// revisión. Un `UPDATE` a mano del administrador también espera a este bloqueo.
+async function conCursoDelAutor<T>(
+  idAutor: string,
+  idCurso: string,
+  mensajeNoExiste: string,
+  accion: (tx: Transaccion, estado: EstadoCurso) => Promise<T>,
+): Promise<T> {
+  return bd.$transaction(async (tx) => {
+    const [curso] = await tx.$queryRaw<(DatosDeEstado & { idAutor: string })[]>`
+      SELECT id_autor AS "idAutor", publicado, revision FROM curso WHERE id = ${idCurso} FOR UPDATE
+    `;
+    // un curso ajeno responde igual que uno que no existe
+    if (curso?.idAutor !== idAutor) throw new ErrorApi(404, mensajeNoExiste);
+    return accion(tx, estadoDelCurso(curso));
+  });
+}
+
+// Toda escritura en el contenido pasa por aquí. Un curso rechazado es un borrador.
 async function conCursoEditable<T>(
   idAutor: string,
   idCurso: string,
   accion: (tx: Transaccion) => Promise<T>,
 ): Promise<T> {
-  return bd.$transaction(async (tx) => {
-    const [curso] = await tx.$queryRaw<{ idAutor: string; publicado: boolean }[]>`
-      SELECT id_autor AS "idAutor", publicado FROM curso WHERE id = ${idCurso} FOR UPDATE
-    `;
-    // un curso ajeno responde igual que uno que no existe
-    if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_EDITOR.cursoEliminado);
-    if (curso.publicado) throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicadoAlGuardar);
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoEliminado, (tx, estado) => {
+    if (estado === "publicado") {
+      throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicadoAlGuardar);
+    }
+    if (estado === "enRevision") {
+      throw new ErrorApi(403, MENSAJES_EDITOR.cursoEnRevisionAlGuardar);
+    }
     return accion(tx);
   });
 }
 
-// Lo mismo para abrir: sin bloqueo y con los mensajes de abrir.
+// Lo mismo para abrir una lección: sin bloqueo y con los mensajes de abrir.
 async function comprobarCursoAbierto(idAutor: string, idCurso: string) {
   const curso = await bd.curso.findUnique({
     where: { id: idCurso },
-    select: { idAutor: true, publicado: true },
+    select: { idAutor: true, publicado: true, revision: true },
   });
   if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
-  if (curso.publicado) throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicado);
+  const estado = estadoDelCurso(curso);
+  if (estado === "publicado") throw new ErrorApi(403, MENSAJES_EDITOR.cursoPublicado);
+  if (estado === "enRevision") throw new ErrorApi(403, MENSAJES_EDITOR.cursoEnRevision);
 }
 
 // PostgreSQL comprueba el índice único de (id_curso, posicion) fila por fila:
@@ -71,17 +100,33 @@ async function tocarCurso(tx: Transaccion, idCurso: string) {
 
 // Las actividades se cuentan en la base, para no traerlas todas al mapa.
 async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise<CursoEnEditor> {
-  const { id, titulo, descripcion } = await cliente.curso.findUniqueOrThrow({
-    where: { id: idCurso },
-    select: { id: true, titulo: true, descripcion: true },
-  });
+  const { id, titulo, descripcion, publicado, revision, motivoRechazo } =
+    await cliente.curso.findUniqueOrThrow({
+      where: { id: idCurso },
+      select: {
+        id: true,
+        titulo: true,
+        descripcion: true,
+        publicado: true,
+        revision: true,
+        motivoRechazo: true,
+      },
+    });
   const lecciones = await cliente.$queryRaw<LeccionEnMapa[]>`
     SELECT id, titulo, posicion, jsonb_array_length(actividades) AS "cantidadActividades"
     FROM leccion
     WHERE id_curso = ${idCurso}
     ORDER BY posicion
   `;
-  return { id, titulo, descripcion, lecciones };
+  return {
+    id,
+    titulo,
+    descripcion,
+    estado: estadoDelCurso({ publicado, revision }),
+    revisionRechazada: revision === "rechazada",
+    motivoRechazo,
+    lecciones,
+  };
 }
 
 // Los cursos de quien llama, publicados o no, del que cambió más recientemente
@@ -94,13 +139,15 @@ export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAuto
       id: true,
       titulo: true,
       publicado: true,
+      revision: true,
       _count: { select: { lecciones: true } },
     },
   });
-  return cursos.map(({ id, titulo, publicado, _count }) => ({
+  return cursos.map(({ id, titulo, publicado, revision, _count }) => ({
     id,
     titulo,
-    estado: publicado ? "publicado" : "borrador",
+    estado: estadoDelCurso({ publicado, revision }),
+    revisionRechazada: revision === "rechazada",
     cantidadLecciones: _count.lecciones,
   }));
 }
@@ -113,11 +160,20 @@ export async function crearCurso(
     data: { titulo, descripcion, idAutor },
     select: { id: true, titulo: true, descripcion: true },
   });
-  return { ...curso, lecciones: [] };
+  return {
+    ...curso,
+    estado: "borrador",
+    revisionRechazada: false,
+    motivoRechazo: null,
+    lecciones: [],
+  };
 }
 
+// Responde en cualquier estado: la pantalla de un curso que no se edita necesita su
+// título y su estado (brote_specs, research de F06, punto 7).
 export async function traerCursoEnEditor(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
-  await comprobarCursoAbierto(idAutor, idCurso);
+  const curso = await bd.curso.findUnique({ where: { id: idCurso }, select: { idAutor: true } });
+  if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
   return leerCursoEnEditor(bd, idCurso);
 }
 
@@ -136,6 +192,51 @@ export async function actualizarCurso(
 // y se retiró, el progreso de sus alumnos se va con él (spec F05, "Supuestos").
 export async function borrarCurso(idAutor: string, idCurso: string): Promise<void> {
   await conCursoEditable(idAutor, idCurso, (tx) => tx.curso.delete({ where: { id: idCurso } }));
+}
+
+// Se cuenta con lo guardado y con el curso bloqueado: nadie puede vaciar una lección
+// entre esta comprobación y el envío.
+async function comprobarContenido(tx: Transaccion, idCurso: string) {
+  const lecciones = await tx.$queryRaw<{ vacia: boolean }[]>`
+    SELECT jsonb_array_length(actividades) = 0 AS vacia FROM leccion WHERE id_curso = ${idCurso}
+  `;
+  if (lecciones.length === 0) throw new ErrorApi(400, MENSAJES_EDITOR.sinLecciones);
+  const vacias = lecciones.filter(({ vacia }) => vacia).length;
+  if (vacias === 1) throw new ErrorApi(400, MENSAJES_EDITOR.unaLeccionVacia);
+  if (vacias > 1) {
+    throw new ErrorApi(400, MENSAJES_EDITOR.leccionesVacias.replace("{n}", String(vacias)));
+  }
+}
+
+// `update` pone `actualizado_en` con @updatedAt, y eso sube el curso en "Cursos que
+// creé". Las actividades no se revisan: solo se guardan después de validarlas.
+export async function enviarARevision(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "borrador") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    await comprobarContenido(tx, idCurso);
+    await tx.curso.update({
+      where: { id: idCurso },
+      data: { revision: "pendiente", motivoRechazo: null },
+    });
+    return leerCursoEnEditor(tx, idCurso);
+  });
+}
+
+export async function retirarDeRevision(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "enRevision") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    await tx.curso.update({ where: { id: idCurso }, data: { revision: null } });
+    return leerCursoEnEditor(tx, idCurso);
+  });
+}
+
+// El progreso de los alumnos se queda: vuelve a contar al publicarse otra vez (F04).
+export async function retirarDelCatalogo(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "publicado") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    await tx.curso.update({ where: { id: idCurso }, data: { publicado: false } });
+    return leerCursoEnEditor(tx, idCurso);
+  });
 }
 
 export async function crearLeccion(

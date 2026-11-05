@@ -97,8 +97,14 @@ model Curso {
   id            String    @id @default(uuid(7))
   titulo        String
   descripcion   String
-  // solo los publicados se ven; lo cambia un administrador en la base (decisión 0014)
+  // solo los publicados se ven; lo pone en true un administrador en la base (decisión
+  // 0014), y en false también su autor, al retirarlo del catálogo (F06)
   publicado     Boolean   @default(false)
+  // F06: null, "pendiente" o "rechazada". Un trigger de la base limpia estos dos
+  // campos cuando cambia `publicado`, y un CHECK valida sus valores (no se ven
+  // aquí: están en la migración f06_revision_curso)
+  revision      String?
+  motivoRechazo String?   @map("motivo_rechazo")
   idAutor       String    @map("id_autor")
   // borrar cuentas está fuera del MVP: un autor con cursos no se puede borrar
   autor         User      @relation(fields: [idAutor], references: [id], onDelete: Restrict)

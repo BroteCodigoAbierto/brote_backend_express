@@ -18,6 +18,7 @@ export type CursoPrueba = {
   titulo: string;
   descripcion: string;
   publicado: boolean;
+  revision?: "pendiente"; // F06: enviado a revisión
   lecciones: LeccionPrueba[]; // en orden
 };
 
@@ -175,6 +176,20 @@ const actividadesDePrueba: CursoPrueba = {
   ],
 };
 
+// F06: una lección que se puede cursar, para enviar y aprobar un curso de verdad.
+const leccionCompleta: LeccionPrueba = {
+  titulo: "Lección 1",
+  actividades: [
+    { tipo: "tarjeta", frente: "Germinar", reverso: "Empezar a crecer" },
+    {
+      tipo: "opcionMultiple",
+      pregunta: "¿Qué necesita una semilla?",
+      opciones: [{ texto: "Agua" }, { texto: "Sal" }],
+      correcta: 0,
+    },
+  ],
+};
+
 const extras: CursoPrueba[] = [
   {
     correoAutor: AUTOR,
@@ -184,12 +199,20 @@ const extras: CursoPrueba[] = [
     lecciones: leccionesNumeradas(1),
   },
   {
-    // en F02 es lo mismo que un borrador: el dato de la revisión llega con F06
     correoAutor: AUTOR,
     titulo: "Curso en revisión",
     descripcion: "Esperando a que lo aprueben.",
     publicado: false,
-    lecciones: leccionesNumeradas(1),
+    revision: "pendiente",
+    lecciones: [leccionCompleta],
+  },
+  {
+    // F06: "Curso en borrador" tiene una lección vacía y no se puede enviar
+    correoAutor: AUTOR,
+    titulo: "Curso listo para enviar",
+    descripcion: "Tiene lo que hace falta para pasar a revisión.",
+    publicado: false,
+    lecciones: [leccionCompleta],
   },
   {
     correoAutor: AUTOR,
