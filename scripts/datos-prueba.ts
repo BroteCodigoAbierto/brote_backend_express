@@ -202,6 +202,44 @@ const fichasQueSeRepiten: Actividad[] = [
   },
 ];
 
+// F11: los máximos de cada tipo, para ver cómo se acomodan los textos largos.
+function textoLargo(inicio: string, largo: number): string {
+  return `${inicio} `.padEnd(largo, "texto largo ").slice(0, largo).trimEnd();
+}
+
+function listaDe<T>(total: number, crear: (numero: number) => T): T[] {
+  return Array.from({ length: total }, (_, i) => crear(i + 1));
+}
+
+const relacionarAlLimite: Actividad[] = [
+  {
+    tipo: "emparejar",
+    parejas: listaDe(8, (n) => ({
+      izquierda: textoLargo(`Izquierda ${n}`, 200),
+      derecha: textoLargo(`Derecha ${n}`, 200),
+    })),
+  },
+  {
+    tipo: "clasificar",
+    categorias: listaDe(4, (n) => textoLargo(`Categoría ${n}`, 100)),
+    elementos: listaDe(12, (n) => ({
+      texto: textoLargo(`Elemento ${n}`, 100),
+      categoria: n % 4,
+    })),
+  },
+  {
+    tipo: "ordenar",
+    consigna: "Ordena los elementos del 1 al 10.",
+    elementos: listaDe(10, (n) => textoLargo(`Elemento ${n}`, 200)),
+  },
+  {
+    tipo: "bancoPalabras",
+    texto: listaDe(10, (n) => `Espacio ${n}: ___`).join("\n"),
+    fichas: listaDe(20, (n) => textoLargo(`Ficha ${n}`, 100)),
+    espacios: listaDe(10, (n) => ({ aceptadas: [textoLargo(`Ficha ${n}`, 100)] })),
+  },
+];
+
 const actividadesDePrueba: CursoPrueba = {
   correoAutor: AUTOR,
   titulo: "Actividades de prueba",
@@ -225,6 +263,7 @@ const actividadesDePrueba: CursoPrueba = {
     { titulo: "Lección sin actividades", actividades: [] },
     { titulo: "Relacionar con etiquetas", actividades: relacionarConEtiquetas },
     { titulo: "Fichas que se repiten", actividades: fichasQueSeRepiten },
+    { titulo: "Relacionar al límite", actividades: relacionarAlLimite },
   ],
 };
 
