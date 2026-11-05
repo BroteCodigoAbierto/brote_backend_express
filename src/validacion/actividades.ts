@@ -63,6 +63,32 @@ function soloCampos(objeto: Objeto, permitidos: string[]) {
   if (sobrante) throw new ErrorActividad(`campo desconocido: ${sobrante}`);
 }
 
+// Devuelve la lista para no tener que volver a comprobar que lo es.
+function listaEntre(valor: unknown, campo: string, minimo: number, maximo: number): unknown[] {
+  if (!Array.isArray(valor) || valor.length < minimo || valor.length > maximo) {
+    throw new ErrorActividad(`${campo}: entre ${minimo} y ${maximo}`);
+  }
+  return valor;
+}
+
+function textoDeLista(valor: unknown, campo: string, maximo: number): string {
+  if (!esTextoNoVacio(valor)) throw new ErrorActividad(`${campo}: textos no vacíos`);
+  comprobarLargo(valor, campo, maximo);
+  return valor;
+}
+
+// Se comparan recortados, respetando las mayúsculas, como las opciones de F05.
+function textosSinRepetir(textos: string[], campo: string) {
+  const recortados = textos.map((texto) => texto.trim());
+  if (new Set(recortados).size !== recortados.length) {
+    throw new ErrorActividad(`${campo}: textos repetidos`);
+  }
+}
+
+function contarMarcas(texto: string): number {
+  return texto.split(MARCA_ESPACIO).length - 1;
+}
+
 function validarTeoria(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "titulo", "texto", "codigo", "puntosClave"]);
   textoOpcional(actividad, "titulo", LIMITES_ACTIVIDADES.tituloMax);
@@ -155,7 +181,7 @@ function validarEspacio(espacio: unknown, indice: number) {
 function validarCompletarEspacios(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "texto", "espacios"]);
   textoObligatorio(actividad, "texto", LIMITES_ACTIVIDADES.textoEspaciosMax);
-  const marcas = (actividad.texto as string).split(MARCA_ESPACIO).length - 1;
+  const marcas = contarMarcas(actividad.texto as string);
   if (marcas === 0) throw new ErrorActividad(`texto sin ningún ${MARCA_ESPACIO}`);
   if (marcas > LIMITES_ACTIVIDADES.espaciosMax) {
     throw new ErrorActividad(`texto: hasta ${LIMITES_ACTIVIDADES.espaciosMax} espacios`);
@@ -173,6 +199,30 @@ function validarPreguntaAbierta(actividad: Objeto) {
   textoObligatorio(actividad, "solucion", LIMITES_ACTIVIDADES.solucionMax);
 }
 
+function validarPareja(pareja: unknown, indice: number) {
+  if (!esObjeto(pareja)) throw new ErrorActividad(`pareja ${indice + 1}: { izquierda, derecha }`);
+  soloCampos(pareja, ["izquierda", "derecha"]);
+  textoObligatorio(pareja, "izquierda", LIMITES_ACTIVIDADES.parejaTextoMax);
+  textoObligatorio(pareja, "derecha", LIMITES_ACTIVIDADES.parejaTextoMax);
+}
+
+function validarEmparejar(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "parejas"]);
+  textoOpcional(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const { parejasMin, parejasMax } = LIMITES_ACTIVIDADES;
+  const parejas = listaEntre(actividad.parejas, "parejas", parejasMin, parejasMax);
+  parejas.forEach(validarPareja);
+  const validas = parejas as Objeto[];
+  textosSinRepetir(
+    validas.map(({ izquierda }) => izquierda as string),
+    "izquierda",
+  );
+  textosSinRepetir(
+    validas.map(({ derecha }) => derecha as string),
+    "derecha",
+  );
+}
+
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
 const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   teoria: validarTeoria,
@@ -180,6 +230,7 @@ const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   opcionMultiple: validarOpcionMultiple,
   completarEspacios: validarCompletarEspacios,
   preguntaAbierta: validarPreguntaAbierta,
+  emparejar: validarEmparejar,
 };
 
 function esTipoConocido(tipo: unknown): tipo is TipoActividad {
