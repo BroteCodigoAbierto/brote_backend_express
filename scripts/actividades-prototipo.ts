@@ -1,8 +1,8 @@
 // Actividades de los cuatro cursos del prototipo, ya convertidas al contrato
-// (brote_specs, research de F03, punto 6, y de F11, punto 11). Salen de
-// brote_specs/referencia/cursos-prototipo/ con los nueve tipos de F03 y F11, en su
+// (brote_specs, research de F03, punto 6, de F11, punto 11, y de F12, punto 10). Salen de
+// brote_specs/referencia/cursos-prototipo/ con los doce tipos de F03, F11 y F12, en su
 // orden, sin glosario y con los textos sin cambios. Si cambia referencia/, se
-// regeneran como dice la tarea T014 de F11. Las usa datos-prueba.ts.
+// regeneran como dice la tarea T016 de F12. Las usa datos-prueba.ts.
 
 import type { Actividad } from "../src/tipos/contrato.ts";
 
@@ -81,6 +81,42 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "Todo empieza con un comando: git init. Convierte la carpeta actual en un repositorio Git, creando una carpeta oculta .git donde vivirá todo el historial.\n\nDesde ahí, el flujo típico es: editas archivos, los agregas al staging area con git add, y los confirmas con git commit.",
       },
       {
+        tipo: "terminalSimulada",
+        consigna: "Estás en una carpeta con un proyecto nuevo. Conviértela en un repositorio Git.",
+        carpeta: "~/proyectos/mi-app",
+        salidaPrevia: "README.md\nindex.html",
+        comandos: ["git init"],
+        salidaAcierto: "Initialized empty Git repository in ~/proyectos/mi-app/.git/",
+        pista: 'El comando que inicializa un repositorio es "git init".',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Quieres ver qué archivos están sin trackear o modificados.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git status"],
+        salidaAcierto:
+          'En la rama main\n\nNo hay commits todavía\n\nArchivos sin seguimiento:\n  (usa "git add <archivo>..." para incluirlo en lo que será confirmado)\n\tREADME.md\n\tindex.html',
+        pista: 'El comando para ver el estado del repositorio es "git status".',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Prepara todos los archivos para el próximo commit.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git add .", "git add -A"],
+        salidaAcierto: '(sin salida: así confirma "git add" que todo salió bien)',
+        pista:
+          'El comando que mueve archivos al staging area es "git add", seguido de los archivos o de "." para todos.',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: 'Confirma los cambios preparados con el mensaje "Primer commit".',
+        carpeta: "~/proyectos/mi-app",
+        comandos: ['git commit -m "Primer commit"', "git commit -m 'Primer commit'"],
+        salidaAcierto:
+          "[main (root-commit) a1b2c3d] Primer commit\n 2 files changed, 10 insertions(+)",
+        pista: 'El comando es: git commit -m "mensaje"',
+      },
+      {
         tipo: "clasificar",
         consigna: "Clasifica cada comando según lo que afecta.",
         categorias: ["Solo prepara (staging)", "Guarda en el historial"],
@@ -132,6 +168,24 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "terminalSimulada",
+        consigna: "Quieres ver el historial de commits en una sola línea por commit.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git log --oneline"],
+        salidaAcierto: "a1b2c3d Primer commit",
+        pista: 'Combina "git log" con la opción "--oneline".',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna:
+          "Te equivocaste editando index.html y quieres descartar los cambios sin confirmar, volviendo a la última versión guardada.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git restore index.html", "git checkout -- index.html"],
+        salidaAcierto: "(sin salida: index.html vuelve a como estaba en el último commit)",
+        pista:
+          'El comando moderno es "git restore <archivo>"; el clásico es "git checkout -- <archivo>".',
+      },
+      {
         tipo: "teoria",
         titulo: "revert vs. reset: dos formas de deshacer",
         texto:
@@ -167,10 +221,63 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "Una rama (branch) es una línea de desarrollo independiente. La rama principal (main) normalmente contiene el código estable; cuando quieres construir algo nuevo sin arriesgar esa estabilidad, creas una rama aparte.\n\nCuando terminas, integras (merge) esa rama de vuelta a main.",
       },
       {
+        tipo: "terminalSimulada",
+        consigna: 'Crea una nueva rama llamada "feature-login" y muévete a ella en un solo paso.',
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git checkout -b feature-login", "git switch -c feature-login"],
+        salidaAcierto: "Switched to a new branch 'feature-login'",
+        pista:
+          '"git checkout -b <nombre>" o el más moderno "git switch -c <nombre>" crean y cambian de rama a la vez.',
+      },
+      {
+        tipo: "grafoCommits",
+        consigna:
+          "Hiciste dos commits en main (c1, c2). Luego creaste la rama feature en c2 e hiciste ahí un commit más (c3). ¿A qué commit apunta main ahora mismo?",
+        commits: [
+          {
+            nombre: "c1",
+            padres: [],
+          },
+          {
+            nombre: "c2",
+            padres: [0],
+          },
+          {
+            nombre: "c3",
+            padres: [1],
+          },
+        ],
+        ramas: [
+          {
+            nombre: "feature",
+            commit: 2,
+          },
+        ],
+        respuesta: 1,
+        explicacion:
+          "Crear y moverte a una rama nueva no mueve main: se queda apuntando a c2, el commit desde el que creaste feature. El nuevo commit c3 solo existe en feature.",
+      },
+      {
         tipo: "teoria",
         titulo: "Uniendo el trabajo: merge",
         texto:
           "Cuando tu rama está lista, vuelves a main y ejecutas git merge feature-login. Si main no avanzó mientras tanto, Git hace un fast-forward: simplemente mueve el puntero de main hasta el último commit de la rama.\n\nSi ambas ramas avanzaron por separado, Git crea un commit de merge que une ambas historias.",
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Terminaste el trabajo en feature-login. Vuelve a main.",
+        carpeta: "~/proyectos/mi-app (feature-login)",
+        comandos: ["git checkout main", "git switch main"],
+        salidaAcierto: "Switched to branch 'main'",
+        pista: '"git checkout <rama>" o "git switch <rama>" cambian de rama.',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Ahora, desde main, integra los cambios de feature-login.",
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git merge feature-login"],
+        salidaAcierto: "Updating a1b2c3d..d4e5f6g\nFast-forward\n index.html | 1 +",
+        pista: 'El comando es "git merge <rama>".',
       },
     ],
     [
@@ -200,6 +307,35 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             derecha: "Descarga los commits nuevos sin combinarlos todavía",
           },
         ],
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna:
+          "Tienes la URL de un repositorio en GitHub y quieres traer una copia completa a tu computadora.",
+        carpeta: "~/proyectos",
+        comandos: ["git clone https://github.com/usuario/mi-app.git"],
+        salidaAcierto:
+          "Cloning into 'mi-app'...\nremote: Enumerating objects: 12, done.\nReceiving objects: 100% (12/12), done.",
+        pista: 'El comando es "git clone" seguido de la URL del repositorio.',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Ya hiciste commits locales en main. Súbelos al remoto origin.",
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git push origin main", "git push"],
+        salidaAcierto:
+          "Enumerating objects: 5, done.\nTo https://github.com/usuario/mi-app.git\n   a1b2c3d..d4e5f6g  main -> main",
+        pista:
+          'El comando es "git push origin main" (o solo "git push" si ya está configurado el upstream).',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna:
+          "Un compañero subió cambios nuevos a origin/main. Tráelos y combínalos con tu rama local.",
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git pull", "git pull origin main"],
+        salidaAcierto: "Updating d4e5f6g..h7i8j9k\nFast-forward\n styles.css | 3 ++-",
+        pista: 'El comando es "git pull".',
       },
       {
         tipo: "opcionMultiple",
@@ -535,6 +671,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           },
         ],
       },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe una función 'esPar' en C que reciba un entero y devuelva 1 si es par, 0 si no.",
+        lenguaje: "c",
+        codigoInicial: "int esPar(int n) {\n  \n}",
+        solucion: "int esPar(int n) {\n  return n % 2 == 0;\n}",
+      },
     ],
     [
       {
@@ -569,6 +713,13 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "¿Qué diferencia hay entre pasar un argumento por valor y por referencia (puntero) en C?",
         solucion:
           "Por valor, la función recibe una copia del dato y no puede modificar la variable original. Por referencia (pasando un puntero), la función recibe la dirección de memoria y sí puede modificar el valor original a través de ese puntero.",
+      },
+      {
+        tipo: "retoCodigo",
+        consigna: "Escribe una función 'maximo' que reciba dos enteros y devuelva el mayor.",
+        lenguaje: "c",
+        codigoInicial: "int maximo(int a, int b) {\n  \n}",
+        solucion: "int maximo(int a, int b) {\n  return a > b ? a : b;\n}",
       },
     ],
     [
@@ -618,6 +769,15 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             aceptadas: ["&"],
           },
         ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe una función 'suma' que reciba un array de enteros y su tamaño, y devuelva la suma de todos.",
+        lenguaje: "c",
+        codigoInicial: "int suma(int arr[], int tam) {\n  \n}",
+        solucion:
+          "int suma(int arr[], int tam) {\n  int total = 0;\n  for (int i = 0; i < tam; i++) {\n    total += arr[i];\n  }\n  return total;\n}",
       },
     ],
   ],
@@ -783,6 +943,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "Tenés un contenedor flex con gap: 16px y 3 elementos hijos. ¿Ese gap agrega espacio antes del primer hijo y después del último? ¿Por qué sí o por qué no?",
         solucion:
           "No. gap solo agrega espacio ENTRE los hijos (entre el 1º y el 2º, y entre el 2º y el 3º) — nunca en los bordes exteriores del contenedor. Si además se quiere espacio antes del primero o después del último, hay que agregarlo aparte, con padding en el contenedor o margin en esos hijos específicos.",
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Tenés 3 elementos .chip dentro de .fila (display: flex). Escribe el CSS para que haya 8px de espacio entre cada chip, sin que se agregue espacio extra en los bordes izquierdo/derecho de .fila.",
+        lenguaje: "css",
+        codigoInicial: ".fila {\n  \n}",
+        solucion: ".fila {\n  display: flex;\n  gap: 8px;\n}",
       },
     ],
     [
@@ -1023,6 +1191,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe el CSS para que .lista sea un contenedor flex con sus elementos en columna (uno debajo del otro) en vez de en fila.",
+        lenguaje: "css",
+        codigoInicial: ".lista {\n  \n}",
+        solucion: ".lista {\n  display: flex;\n  flex-direction: column;\n}",
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "¿Qué diferencia hay entre el eje principal y el eje cruzado, y por qué importa saber cuál es cuál antes de usar justify-content o align-items?",
@@ -1124,6 +1300,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .navbar tiene un logo y tres links como hijos directos. Escribe el CSS para que sea un contenedor flex y los cuatro elementos queden con exactamente el mismo espacio entre ellos y también en los bordes del navbar.",
+        lenguaje: "css",
+        codigoInicial: ".navbar {\n  \n}",
+        solucion: ".navbar {\n  display: flex;\n  justify-content: space-evenly;\n}",
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "Tienes un contenedor con 3 elementos y justify-content: space-between. Si le agregas un cuarto elemento hasta llenar todo el ancho del contenedor, ¿qué pasa visualmente con el efecto de justify-content?",
@@ -1192,6 +1376,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             derecha: "Alinea los elementos por la línea base de su texto",
           },
         ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Una .tarjeta tiene un ícono y un texto como hijos directos, de distinta altura. Escribe el CSS para que sea un contenedor flex y ambos hijos queden centrados verticalmente entre sí.",
+        lenguaje: "css",
+        codigoInicial: ".tarjeta {\n  \n}",
+        solucion: ".tarjeta {\n  display: flex;\n  align-items: center;\n}",
       },
       {
         tipo: "tarjeta",
@@ -1272,6 +1464,15 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "Aplicar display: flex a .layout",
           "Aplicar flex: 1 a cada una de las tres columnas hijas",
         ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Tienes un .layout con dos hijos directos: .sidebar (debe medir siempre 200px fijos) y .main (debe ocupar todo el espacio restante). Escribe el CSS necesario para las tres clases.",
+        lenguaje: "css",
+        codigoInicial: ".layout {\n  \n}\n\n.sidebar {\n  \n}\n\n.main {\n  \n}",
+        solucion:
+          ".layout {\n  display: flex;\n}\n\n.sidebar {\n  width: 200px;\n}\n\n.main {\n  flex: 1;\n}",
       },
       {
         tipo: "preguntaAbierta",
@@ -1360,6 +1561,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .catalogo tiene muchas .tarjeta como hijas, cada una con un ancho mínimo. Escribe el CSS para que sea un contenedor flex que las acomode en filas, pasando a una nueva línea cuando no quepan más en el ancho disponible.",
+        lenguaje: "css",
+        codigoInicial: ".catalogo {\n  \n}",
+        solucion: ".catalogo {\n  display: flex;\n  flex-wrap: wrap;\n}",
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "Tienes 6 tarjetas de 200px cada una dentro de un contenedor de 500px con flex-wrap: nowrap. ¿Qué pasa visualmente, y cómo lo arreglarías con lo visto en esta lección?",
@@ -1445,6 +1654,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .lista-chips es un contenedor flex con varios .chip como hijos. Escribe el CSS para que haya 12px de espacio entre cada chip, sin usar margin.",
+        lenguaje: "css",
+        codigoInicial: ".lista-chips {\n  \n}",
+        solucion: ".lista-chips {\n  display: flex;\n  gap: 12px;\n}",
+      },
+      {
         tipo: "tarjeta",
         frente: "order",
         reverso:
@@ -1489,6 +1706,24 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe el CSS para .pantalla (el contenedor) de modo que un único .modal hijo quede perfectamente centrado, tanto horizontal como verticalmente.",
+        lenguaje: "css",
+        codigoInicial: ".pantalla {\n  height: 100vh;\n  \n}",
+        solucion:
+          ".pantalla {\n  height: 100vh;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n}",
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .navbar tiene un .logo y una .lista-links como únicos hijos directos. Escribe el CSS para que queden en extremos opuestos (logo a la izquierda, links a la derecha) y ambos centrados verticalmente entre sí.",
+        lenguaje: "css",
+        codigoInicial: ".navbar {\n  \n}",
+        solucion:
+          ".navbar {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}",
+      },
+      {
         tipo: "ordenar",
         consigna:
           'Ordena los pasos para construir un "sticky footer" (un footer que queda pegado abajo incluso si el contenido es corto) usando Flexbox.',
@@ -1497,6 +1732,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "Dejar que header y footer mantengan su altura natural",
           "Aplicar flex: 1 al contenedor del contenido principal, para que ocupe todo el espacio sobrante y empuje el footer hacia abajo",
         ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Completa el patrón de sticky footer: el body ya tiene min-height: 100vh y display: flex; flex-direction: column;. Escribe el CSS que falta para .main-content, de forma que crezca y ocupe todo el espacio sobrante entre el header y el footer.",
+        lenguaje: "css",
+        codigoInicial: ".main-content {\n  \n}",
+        solucion: ".main-content {\n  flex: 1;\n}",
       },
       {
         tipo: "tarjeta",
