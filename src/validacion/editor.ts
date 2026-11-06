@@ -89,8 +89,10 @@ function tieneFormaDeLeccion(cuerpo: unknown): cuerpo is Record<string, unknown>
 }
 
 // El título de la teoría se guarda recortado, y también las fichas del banco, que se
-// comparan por su texto exacto (F11). Los demás textos, tal como se escribieron,
-// porque muchas veces son código.
+// comparan por su texto exacto (F11), y lo que en F12 va en una sola línea: la carpeta y
+// los comandos de la terminal y los nombres de los commits y las ramas del grafo. Los
+// demás textos, tal como se escribieron, porque muchas veces son código: el código
+// inicial, la solución y las salidas conservan su sangría.
 function recortarTextos(actividades: Actividad[]): Actividad[] {
   return actividades.map((actividad) => {
     if (actividad.tipo === "teoria" && actividad.titulo !== undefined) {
@@ -103,6 +105,20 @@ function recortarTextos(actividades: Actividad[]): Actividad[] {
         espacios: actividad.espacios.map(({ aceptadas }) => ({
           aceptadas: aceptadas.map((aceptada) => aceptada.trim()),
         })),
+      };
+    }
+    if (actividad.tipo === "terminalSimulada") {
+      return {
+        ...actividad,
+        ...(actividad.carpeta !== undefined && { carpeta: actividad.carpeta.trim() }),
+        comandos: actividad.comandos.map((comando) => comando.trim()),
+      };
+    }
+    if (actividad.tipo === "grafoCommits") {
+      return {
+        ...actividad,
+        commits: actividad.commits.map((commit) => ({ ...commit, nombre: commit.nombre.trim() })),
+        ramas: actividad.ramas.map((rama) => ({ ...rama, nombre: rama.nombre.trim() })),
       };
     }
     return actividad;
