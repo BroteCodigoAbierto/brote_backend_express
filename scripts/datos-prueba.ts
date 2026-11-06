@@ -1,4 +1,4 @@
-// Cuentas y cursos de prueba de F02, F03 y F11 (brote_specs, quickstart de cada
+// Cuentas y cursos de prueba de F02, F03, F11 y F12 (brote_specs, quickstart de cada
 // una, sección 1.1). Los cuatro cursos publicados copian tal
 // cual el título, la descripción y los títulos de las lecciones de
 // brote_specs/referencia/cursos-prototipo/, y sus actividades salen de
@@ -8,7 +8,7 @@
 // Ningún curso extra usa en su texto las palabras de los criterios de búsqueda
 // (git, japones, programacion, flex, sencill, cocina, equipo, brote).
 
-import type { Actividad } from "../src/tipos/contrato.ts";
+import { LIMITES_ACTIVIDADES, type Actividad } from "../src/tipos/contrato.ts";
 import { ACTIVIDADES_PROTOTIPO } from "./actividades-prototipo.ts";
 
 export type CuentaPrueba = { correo: string; nombre: string; contrasena: string };
@@ -240,6 +240,169 @@ const relacionarAlLimite: Actividad[] = [
   },
 ];
 
+// F12: los tres tipos de código y terminal, con etiquetas en todos sus textos, también en
+// el nombre de un commit y de una rama.
+const codigoConEtiquetas: Actividad[] = [
+  {
+    tipo: "retoCodigo",
+    consigna: `Consigna ${HTML}`,
+    lenguaje: "html",
+    codigoInicial: `<p>${HTML}</p>`,
+    solucion: `<p>Solución ${HTML}</p>`,
+  },
+  {
+    tipo: "terminalSimulada",
+    consigna: `Consigna ${HTML}`,
+    carpeta: `~/${HTML}`,
+    salidaPrevia: `Salida previa ${HTML}`,
+    comandos: [`echo "${HTML}"`],
+    salidaAcierto: `Salida ${HTML}`,
+    pista: `Pista ${HTML}`,
+  },
+  {
+    tipo: "grafoCommits",
+    consigna: `Consigna ${HTML}`,
+    commits: [
+      { nombre: "<b>", padres: [] },
+      { nombre: "c2", padres: [0] },
+    ],
+    ramas: [{ nombre: "<script>", commit: 1 }],
+    head: { rama: 0 },
+    respuesta: 0,
+    explicacion: `Explicación ${HTML}`,
+  },
+];
+
+// F12: un reto sin código inicial, con una línea de SQL que parece de diff, y uno sin
+// etiqueta de lenguaje.
+const retosDeCodigo: Actividad[] = [
+  {
+    tipo: "retoCodigo",
+    consigna: "Escribe la consulta que trae todos los alumnos.",
+    lenguaje: "sql",
+    solucion: "-- Todos los alumnos\nSELECT * FROM alumnos;",
+  },
+  {
+    tipo: "retoCodigo",
+    consigna: "Completa la línea con tu nombre.",
+    lenguaje: "otro",
+    codigoInicial: "Nombre: ",
+    solucion: "Nombre: Ana",
+  },
+];
+
+// F12: los tres grafos de quickstart.md, sección 1.1. Los padres, las ramas y HEAD son
+// índices en `commits`.
+const grafos: Actividad[] = [
+  {
+    tipo: "grafoCommits",
+    consigna: "¿Qué commit une el trabajo de las dos ramas?",
+    commits: [
+      { nombre: "c1", padres: [] },
+      { nombre: "c2", padres: [0] },
+      { nombre: "c3", padres: [1] },
+      { nombre: "c4", padres: [1] },
+      { nombre: "c5", padres: [2, 3] },
+    ],
+    ramas: [
+      { nombre: "main", commit: 4 },
+      { nombre: "feature", commit: 3 },
+    ],
+    head: { rama: 0 },
+    respuesta: 4,
+    explicacion: "c5 es un merge: tiene dos padres, c3 y c4.",
+  },
+  {
+    tipo: "grafoCommits",
+    consigna: "La rama que trajo c3 ya se borró. ¿Qué commit venía de ella?",
+    commits: [
+      { nombre: "c1", padres: [] },
+      { nombre: "c2", padres: [0] },
+      { nombre: "c3", padres: [0] },
+      { nombre: "c4", padres: [1, 2] },
+    ],
+    ramas: [{ nombre: "main", commit: 3 }],
+    respuesta: 2,
+    explicacion: "c3 entró a main con el merge c4.",
+  },
+  {
+    tipo: "grafoCommits",
+    consigna: "HEAD está suelto. ¿En qué commit estás?",
+    commits: [
+      { nombre: "c1", padres: [] },
+      { nombre: "c2", padres: [0] },
+      { nombre: "c3", padres: [1] },
+      { nombre: "c4", padres: [2] },
+    ],
+    ramas: [{ nombre: "main", commit: 3 }],
+    head: { commit: 1 },
+    respuesta: 1,
+  },
+];
+
+// F12: un texto de varias líneas de `largo` caracteres, con una línea de 150, más ancha
+// que el panel.
+function lineasAlLimite(inicio: string, largo: number): string {
+  const lineas = [textoLargo(inicio, 150), ...listaDe(200, (n) => `  linea(${n});`)];
+  return lineas.join("\n").slice(0, largo);
+}
+
+// F12: los máximos de cada tipo. El grafo es el de quickstart.md: 10 commits en 6 columnas
+// y 3 filas, y 4 ramas de 20 caracteres.
+const codigoAlLimite: Actividad[] = [
+  {
+    tipo: "retoCodigo",
+    consigna: "Cambia lo que quieras del código y comprueba.",
+    lenguaje: "javascript",
+    codigoInicial: lineasAlLimite("// Código inicial:", LIMITES_ACTIVIDADES.codigoMax),
+    solucion: lineasAlLimite("// Solución:", LIMITES_ACTIVIDADES.solucionMax),
+  },
+  {
+    tipo: "terminalSimulada",
+    consigna: "Escribe ls carpeta-2: es uno de los diez comandos aceptados.",
+    // una ruta sin espacios, como las de verdad
+    carpeta: `~/${listaDe(20, (n) => `carpeta-${n}`).join("/")}`.slice(
+      0,
+      LIMITES_ACTIVIDADES.carpetaMax,
+    ),
+    salidaPrevia: lineasAlLimite("Salida previa:", LIMITES_ACTIVIDADES.salidaMax),
+    comandos: [
+      textoLargo("echo", LIMITES_ACTIVIDADES.comandoMax),
+      ...listaDe(9, (n) => `ls carpeta-${n + 1}`),
+    ],
+    salidaAcierto: lineasAlLimite("Salida al acertar:", LIMITES_ACTIVIDADES.salidaMax),
+    pista: textoLargo("Pista:", LIMITES_ACTIVIDADES.pistaMax),
+  },
+  {
+    tipo: "grafoCommits",
+    consigna: "¿Qué commit es un merge?",
+    commits: [
+      { nombre: "m1a1", padres: [] },
+      { nombre: "m2b2", padres: [0] },
+      { nombre: "m3c3", padres: [1] },
+      { nombre: "m4d4", padres: [2] },
+      { nombre: "m5e5", padres: [3] },
+      { nombre: "m6f6", padres: [4] },
+      { nombre: "f1g1", padres: [1] },
+      { nombre: "f2h2", padres: [6] },
+      { nombre: "x1i1", padres: [2] },
+      { nombre: "x2j2", padres: [7, 8] },
+    ],
+    ramas: [
+      { nombre: "principal-del-equipo", commit: 5 },
+      { nombre: "funcion-del-registro", commit: 9 },
+      { nombre: "arreglo-del-portal-1", commit: 8 },
+      { nombre: "etiqueta-del-inicio1", commit: 4 },
+    ],
+    head: { rama: 1 },
+    respuesta: 9,
+    explicacion: textoLargo(
+      "x2j2 tiene dos padres, f2h2 y x1i1:",
+      LIMITES_ACTIVIDADES.explicacionMax,
+    ),
+  },
+];
+
 const actividadesDePrueba: CursoPrueba = {
   correoAutor: AUTOR,
   titulo: "Actividades de prueba",
@@ -264,6 +427,37 @@ const actividadesDePrueba: CursoPrueba = {
     { titulo: "Relacionar con etiquetas", actividades: relacionarConEtiquetas },
     { titulo: "Fichas que se repiten", actividades: fichasQueSeRepiten },
     { titulo: "Relacionar al límite", actividades: relacionarAlLimite },
+    // F12, al final para no mover las posiciones que citan F03, F05 y F11
+    { titulo: "Código con etiquetas", actividades: codigoConEtiquetas },
+    { titulo: "Retos de código", actividades: retosDeCodigo },
+    {
+      titulo: "Terminal mínima",
+      actividades: [
+        {
+          tipo: "terminalSimulada",
+          consigna: "Muestra los archivos de la carpeta.",
+          comandos: ["ls"],
+        },
+      ],
+    },
+    { titulo: "Grafos", actividades: grafos },
+    { titulo: "Código al límite", actividades: codigoAlLimite },
+    {
+      // ya ninguna lección del prototipo queda sin preguntas (spec F12, "Supuestos")
+      titulo: "Solo teoría",
+      actividades: [
+        {
+          tipo: "teoria",
+          titulo: "Una lección sin preguntas",
+          texto: "Esta lección solo tiene teoría y una tarjeta, así que no tiene preguntas.",
+        },
+        {
+          tipo: "tarjeta",
+          frente: "¿Cuenta como pregunta?",
+          reverso: "No: las tarjetas no se califican.",
+        },
+      ],
+    },
   ],
 };
 
