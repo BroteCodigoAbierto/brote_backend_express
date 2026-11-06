@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.8.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.9.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -218,6 +218,74 @@ export type ActividadBancoPalabras = {
   espacios: EspacioRespuesta[]; // uno por cada MARCA_ESPACIO del texto
 };
 
+// Los lenguajes de un reto de código (F12). Solo se muestran como etiqueta: no hay
+// coloreado de sintaxis.
+export const LENGUAJES_CODIGO = [
+  "c",
+  "css",
+  "html",
+  "javascript",
+  "python",
+  "sql",
+  "bash",
+  "otro",
+] as const;
+
+export type LenguajeCodigo = (typeof LENGUAJES_CODIGO)[number];
+
+// Cómo se escribe cada uno. "otro" no se muestra al alumno.
+export const NOMBRE_LENGUAJE: Record<LenguajeCodigo, string> = {
+  c: "C",
+  css: "CSS",
+  html: "HTML",
+  javascript: "JavaScript",
+  python: "Python",
+  sql: "SQL",
+  bash: "Bash",
+  otro: "Otro",
+};
+
+export type ActividadRetoCodigo = {
+  tipo: "retoCodigo";
+  consigna: string;
+  lenguaje: LenguajeCodigo;
+  codigoInicial?: string; // con lo que empieza el campo; sin él, vacío
+  solucion: string; // se muestra al comprobar; el alumno se autoevalúa
+};
+
+export type ActividadTerminalSimulada = {
+  tipo: "terminalSimulada";
+  consigna: string;
+  carpeta?: string; // va antes del $
+  salidaPrevia?: string; // lo que la terminal ya muestra
+  comandos: string[]; // las formas aceptadas; la primera se muestra como respuesta correcta
+  salidaAcierto?: string; // se muestra si acierta
+  pista?: string; // se muestra si falla
+};
+
+export type CommitGrafo = {
+  nombre: string;
+  padres: number[]; // índices de commits anteriores: ninguno el primero, dos un merge
+};
+
+export type RamaGrafo = {
+  nombre: string;
+  commit: number; // índice en `commits`
+};
+
+// HEAD apunta a una rama o, suelto, a un commit.
+export type HeadGrafo = { rama: number } | { commit: number };
+
+export type ActividadGrafoCommits = {
+  tipo: "grafoCommits";
+  consigna: string;
+  commits: CommitGrafo[]; // del más antiguo al más nuevo; los clientes los acomodan
+  ramas: RamaGrafo[]; // en el orden del autor: una fila por rama, de arriba abajo
+  head?: HeadGrafo;
+  respuesta: number; // índice en `commits`
+  explicacion?: string; // se muestra al comprobar, acierte o no
+};
+
 export type Actividad =
   | ActividadTeoria
   | ActividadTarjeta
@@ -227,7 +295,10 @@ export type Actividad =
   | ActividadEmparejar
   | ActividadClasificar
   | ActividadOrdenar
-  | ActividadBancoPalabras;
+  | ActividadBancoPalabras
+  | ActividadRetoCodigo
+  | ActividadTerminalSimulada
+  | ActividadGrafoCommits;
 
 export type TipoActividad = Actividad["tipo"];
 
@@ -289,6 +360,21 @@ export const LIMITES_ACTIVIDADES = {
   fichasMin: 2,
   fichasMax: 20,
   fichaMax: 100,
+  // actividades de código y terminal (F12); la consigna usa consignaMax, el código
+  // inicial codigoMax y la solución solucionMax
+  respuestaCodigoMax: 2000, // lo que escribe el alumno
+  carpetaMax: 100,
+  salidaMax: 2000,
+  comandosMax: 10,
+  comandoMax: 200, // también lo que escribe el alumno
+  pistaMax: 500,
+  commitsMin: 2,
+  commitsMax: 10,
+  nombreCommitMax: 4, // cabe dentro del círculo
+  columnasGrafoMax: 6, // con áreas de 44 px, cabe en un teléfono de 360 px
+  ramasMax: 4,
+  nombreRamaMax: 20,
+  explicacionMax: 500,
 } as const;
 
 export const MENSAJES_LECCION = {
@@ -313,6 +399,9 @@ export const CALIFICA_ACTIVIDAD: Record<TipoActividad, boolean> = {
   clasificar: true,
   ordenar: true,
   bancoPalabras: true,
+  retoCodigo: true,
+  terminalSimulada: true,
+  grafoCommits: true,
 };
 
 // La última vez que el alumno completó una lección.
@@ -461,6 +550,18 @@ export const MENSAJES_EDITOR = {
   demasiadosEspaciosBanco: "El texto puede tener hasta 10 espacios.",
   fichasInsuficientes:
     "No alcanzan las fichas para llenar todos los espacios. Si una palabra va en dos, agrégala dos veces.",
+  // actividades de código y terminal (F12)
+  lenguajeFalta: "Elige un lenguaje.",
+  comandoRepetido: "Este comando está repetido.",
+  nombreCommitRepetido: "Este nombre ya lo tiene otro commit.",
+  padreFalta: "Elige un padre.",
+  segundoPadreIgual: "El segundo padre tiene que ser otro commit.",
+  demasiadasColumnas:
+    "El grafo puede tener hasta 6 commits seguidos de izquierda a derecha. Pon alguno en paralelo o quita alguno.",
+  ramaRepetida: "Esta rama está repetida.",
+  ramaHead: "Una rama no se puede llamar HEAD.",
+  commitFalta: "Elige un commit.",
+  respuestaFalta: "Elige la respuesta.",
   maxLecciones: "Un curso puede tener hasta 100 lecciones.",
   maxActividades: "Una lección puede tener hasta 50 actividades.",
   // al abrir una lección (403); al abrir, un 404 usa los mensajes de F02 y F03
