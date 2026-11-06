@@ -1,7 +1,9 @@
 import {
+  LENGUAJES_CODIGO,
   LIMITES_ACTIVIDADES,
   MARCA_ESPACIO,
   type Actividad,
+  type CommitGrafo,
   type TipoActividad,
 } from "../tipos/contrato.ts";
 
@@ -87,6 +89,48 @@ function textosSinRepetir(textos: string[], campo: string) {
 
 function contarMarcas(texto: string): number {
   return texto.split(MARCA_ESPACIO).length - 1;
+}
+
+// La carpeta, los comandos y los nombres del grafo van en una sola línea: la terminal y el
+// círculo de un commit no tienen dónde poner un salto (F12).
+function deUnaLinea(texto: string, campo: string) {
+  if (/[\n\r]/.test(texto)) throw new ErrorActividad(`${campo}: de una línea`);
+}
+
+// Como compara la terminal (brote_specs, research de F12, punto 6): lo que escribe el alumno
+// nunca trae comillas tipográficas, raya ni puntos suspensivos, así que en un comando del autor
+// cuentan como sus versiones rectas; y una racha de espacios cuenta como uno. Es una copia de
+// la de los clientes.
+function normalizarComando(texto: string): string {
+  return texto
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/—/g, "--")
+    .replace(/…/g, "...")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+// Un índice de una lista de `total` elementos. Con `total` igual al índice de un commit,
+// también comprueba que el padre vaya antes que él.
+function indiceEn(valor: unknown, total: number, campo: string): number {
+  if (!Number.isInteger(valor) || (valor as number) < 0 || (valor as number) >= total) {
+    throw new ErrorActividad(`${campo} fuera de rango`);
+  }
+  return valor as number;
+}
+
+// Columnas por generaciones (research de F12, punto 2): el primer commit en la 0 y cada uno de
+// los demás en 1 más la mayor de sus padres. Como los padres van antes en la lista, basta una
+// pasada. Los clientes acomodan el grafo con la misma regla; aquí solo hace falta el total,
+// para el límite de columnas.
+function contarColumnas(commits: CommitGrafo[]): number {
+  const columnas: number[] = [];
+  commits.forEach(({ padres }, indice) => {
+    columnas[indice] =
+      padres.length === 0 ? 0 : 1 + Math.max(...padres.map((padre) => columnas[padre]));
+  });
+  return Math.max(...columnas) + 1;
 }
 
 function validarTeoria(actividad: Objeto) {
@@ -345,6 +389,137 @@ function validarBancoPalabras(actividad: Objeto) {
   }
 }
 
+function esLenguajeCodigo(valor: unknown): boolean {
+  return (LENGUAJES_CODIGO as readonly unknown[]).includes(valor);
+}
+
+// El código inicial y la solución se guardan tal como llegan: son código, con su sangría.
+function validarRetoCodigo(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "lenguaje", "codigoInicial", "solucion"]);
+  textoObligatorio(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  // Se guarda el id ("css"), no el nombre que se muestra ("CSS").
+  if (!esLenguajeCodigo(actividad.lenguaje)) {
+    throw new ErrorActividad(`lenguaje: uno de ${LENGUAJES_CODIGO.join(", ")}`);
+  }
+  textoOpcional(actividad, "codigoInicial", LIMITES_ACTIVIDADES.codigoMax);
+  textoObligatorio(actividad, "solucion", LIMITES_ACTIVIDADES.solucionMax);
+}
+
+// Los comandos repetidos se comparan como los compara la terminal, y recortados, porque el
+// recorte se hace después (validacion/editor.ts).
+function validarTerminalSimulada(actividad: Objeto) {
+  soloCampos(actividad, [
+    "tipo",
+    "consigna",
+    "carpeta",
+    "salidaPrevia",
+    "comandos",
+    "salidaAcierto",
+    "pista",
+  ]);
+  const { consignaMax, carpetaMax, salidaMax, comandosMax, comandoMax, pistaMax } =
+    LIMITES_ACTIVIDADES;
+  textoObligatorio(actividad, "consigna", consignaMax);
+  textoOpcional(actividad, "carpeta", carpetaMax);
+  if ("carpeta" in actividad) deUnaLinea(actividad.carpeta as string, "carpeta");
+  textoOpcional(actividad, "salidaPrevia", salidaMax);
+  const comandos = listaEntre(actividad.comandos, "comandos", 1, comandosMax).map((valor) => {
+    const comando = textoDeLista(valor, "comandos", comandoMax);
+    deUnaLinea(comando, "comandos");
+    return normalizarComando(comando);
+  });
+  if (new Set(comandos).size !== comandos.length) {
+    throw new ErrorActividad("comandos repetidos");
+  }
+  textoOpcional(actividad, "salidaAcierto", salidaMax);
+  textoOpcional(actividad, "pista", pistaMax);
+}
+
+// Los commits van del más antiguo al más nuevo: el primero no tiene padres y cada uno de los
+// demás tiene uno o dos de más arriba. Así no puede haber ciclos (research de F12, punto 1).
+function validarCommit(commit: unknown, indice: number): CommitGrafo {
+  const campo = `commit ${indice + 1}`;
+  if (!esObjeto(commit)) throw new ErrorActividad(`${campo}: { nombre, padres }`);
+  soloCampos(commit, ["nombre", "padres"]);
+  const nombre = textoDeLista(
+    commit.nombre,
+    `${campo}: nombre`,
+    LIMITES_ACTIVIDADES.nombreCommitMax,
+  );
+  deUnaLinea(nombre, `${campo}: nombre`);
+  const { padres } = commit;
+  if (!Array.isArray(padres)) throw new ErrorActividad(`${campo}: padres debe ser una lista`);
+  if (indice === 0 && padres.length !== 0) {
+    throw new ErrorActividad(`${campo}: el primero no tiene padres`);
+  }
+  if (indice > 0 && (padres.length < 1 || padres.length > 2)) {
+    throw new ErrorActividad(`${campo}: uno o dos padres`);
+  }
+  padres.forEach((padre) => indiceEn(padre, indice, `${campo}: padre`));
+  if (padres.length === 2 && padres[0] === padres[1]) {
+    throw new ErrorActividad(`${campo}: padres repetidos`);
+  }
+  return { nombre, padres: padres as number[] };
+}
+
+function validarCommitsGrafo(valor: unknown): CommitGrafo[] {
+  const { commitsMin, commitsMax, columnasGrafoMax } = LIMITES_ACTIVIDADES;
+  const commits = listaEntre(valor, "commits", commitsMin, commitsMax).map(validarCommit);
+  textosSinRepetir(
+    commits.map(({ nombre }) => nombre),
+    "commits",
+  );
+  if (contarColumnas(commits) > columnasGrafoMax) {
+    throw new ErrorActividad(`commits: hasta ${columnasGrafoMax} columnas`);
+  }
+  return commits;
+}
+
+function validarRama(rama: unknown, indice: number, commits: number): string {
+  const campo = `rama ${indice + 1}`;
+  if (!esObjeto(rama)) throw new ErrorActividad(`${campo}: { nombre, commit }`);
+  soloCampos(rama, ["nombre", "commit"]);
+  const nombre = textoDeLista(rama.nombre, `${campo}: nombre`, LIMITES_ACTIVIDADES.nombreRamaMax);
+  deUnaLinea(nombre, `${campo}: nombre`);
+  // Respetando las mayúsculas, como Git: "head" sí vale.
+  if (nombre.trim() === "HEAD") throw new ErrorActividad(`${campo}: no se puede llamar HEAD`);
+  indiceEn(rama.commit, commits, `${campo}: commit`);
+  return nombre;
+}
+
+// HEAD apunta a una rama o, suelto, a un commit: un objeto con uno solo de los dos campos.
+function validarHead(head: unknown, ramas: number, commits: number) {
+  if (!esObjeto(head) || Object.keys(head).length !== 1) {
+    throw new ErrorActividad("head: { rama } o { commit }");
+  }
+  soloCampos(head, ["rama", "commit"]);
+  if ("rama" in head) indiceEn(head.rama, ramas, "head: rama");
+  else indiceEn(head.commit, commits, "head: commit");
+}
+
+// `ramas` siempre está, aunque vacía. Los nombres repetidos se comparan recortados, porque el
+// recorte se hace después (validacion/editor.ts).
+function validarGrafoCommits(actividad: Objeto) {
+  soloCampos(actividad, [
+    "tipo",
+    "consigna",
+    "commits",
+    "ramas",
+    "head",
+    "respuesta",
+    "explicacion",
+  ]);
+  textoObligatorio(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const commits = validarCommitsGrafo(actividad.commits);
+  const ramas = listaEntre(actividad.ramas, "ramas", 0, LIMITES_ACTIVIDADES.ramasMax).map(
+    (rama, indice) => validarRama(rama, indice, commits.length),
+  );
+  textosSinRepetir(ramas, "ramas");
+  if ("head" in actividad) validarHead(actividad.head, ramas.length, commits.length);
+  indiceEn(actividad.respuesta, commits.length, "respuesta");
+  textoOpcional(actividad, "explicacion", LIMITES_ACTIVIDADES.explicacionMax);
+}
+
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
 const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   teoria: validarTeoria,
@@ -356,6 +531,9 @@ const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   clasificar: validarClasificar,
   ordenar: validarOrdenar,
   bancoPalabras: validarBancoPalabras,
+  retoCodigo: validarRetoCodigo,
+  terminalSimulada: validarTerminalSimulada,
+  grafoCommits: validarGrafoCommits,
 };
 
 function esTipoConocido(tipo: unknown): tipo is TipoActividad {
