@@ -1,8 +1,9 @@
 // Actividades de los cuatro cursos del prototipo, ya convertidas al contrato
-// (brote_specs, research de F03, punto 6, de F11, punto 11, y de F12, punto 10). Salen de
-// brote_specs/referencia/cursos-prototipo/ con los doce tipos de F03, F11 y F12, en su
-// orden, sin glosario y con los textos sin cambios. Si cambia referencia/, se
-// regeneran como dice la tarea T016 de F12. Las usa datos-prueba.ts.
+// (brote_specs, research de F03, punto 6, de F11, punto 11, de F12, punto 10, y de F14,
+// punto 16). Salen de brote_specs/referencia/cursos-prototipo/ con los trece tipos de F03,
+// F11, F12 y F14, en su orden, sin glosario y con los textos sin cambios. Escuchar y
+// repetir no trae el `lang` del prototipo: el idioma es del curso (F14). Si cambia
+// referencia/, se regeneran como dice la tarea T016 de F12. Las usa datos-prueba.ts.
 
 import type { Actividad } from "../src/tipos/contrato.ts";
 
@@ -462,6 +463,11 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         frente: "お",
         reverso: "Se lee 'o', como en 'oso'. Es la última de las cinco vocales del hiragana.",
       },
+      {
+        tipo: "escucharRepetir",
+        frase: "あいうえお",
+        mostrarTexto: true,
+      },
     ],
     [
       {
@@ -489,6 +495,11 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             aceptadas: ["元気"],
           },
         ],
+      },
+      {
+        tipo: "escucharRepetir",
+        frase: "こんにちは、元気ですか？",
+        mostrarTexto: true,
       },
       {
         tipo: "preguntaAbierta",
