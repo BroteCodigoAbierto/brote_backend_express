@@ -116,6 +116,10 @@ model Curso {
   idPortada     String?   @map("id_portada")
   portada       Imagen?   @relation("PortadaCurso", fields: [idPortada], references: [id], onDelete: SetNull)
   imagenes      Imagen[]  @relation("ImagenesCurso")
+  // F14: el de la voz que lee las frases de escuchar y repetir, uno de IDIOMAS_CURSO (un
+  // CHECK de la migración f14_escuchar_repetir). Los cursos de antes quedaron en "es"
+  idioma        String    @default("es")
+  audios        Audio[]   @relation("AudiosCurso")
 
   @@index([idAutor])
   @@map("curso")
@@ -134,6 +138,8 @@ model Leccion {
   // F13: los ids de las imágenes que usan sus actividades, sin repetir. Lo escribe
   // guardarLeccion; así "se usa en el curso" no tiene que leer el JSON
   imagenes      String[]   @default([])
+  // F14: lo mismo con los audios
+  audios        String[]   @default([])
   creadoEn      DateTime   @default(now()) @map("creado_en")
   actualizadoEn DateTime   @updatedAt @map("actualizado_en")
   progresos     Progreso[] // F04 (no crea columnas)
@@ -187,4 +193,29 @@ model Imagen {
 
   @@unique([idCurso, huella])
   @@map("imagen")
+}
+
+// ---------------------------------------------------------------------------
+// Audio (F14): un archivo de audio de un curso, con sus bytes ya sin datos ocultos
+// (decisión 0017). Sigue las reglas de Imagen: nunca cambia, el mismo archivo es el mismo
+// audio, y las consultas de metadatos nunca piden `datos`. La migración agrega el CHECK de
+// formato, duración y peso, que Prisma no sabe declarar.
+// ---------------------------------------------------------------------------
+
+model Audio {
+  id       String   @id @default(uuid(7))
+  idCurso  String   @map("id_curso")
+  curso    Curso    @relation("AudiosCurso", fields: [idCurso], references: [id], onDelete: Cascade)
+  // SHA-256 de `datos`, el audio ya limpio: dos archivos que solo cambian en su título son
+  // el mismo audio
+  huella   String
+  formato  String // mp3, m4a o wav (FORMATOS_AUDIO)
+  duracion Int // milisegundos
+  peso     Int // bytes, igual a la longitud de `datos`
+  datos    Bytes
+  // se renueva si se sube otra vez el mismo audio; decide cuándo se borra si nada lo usa
+  subidaEn DateTime @default(now()) @map("subida_en")
+
+  @@unique([idCurso, huella])
+  @@map("audio")
 }
