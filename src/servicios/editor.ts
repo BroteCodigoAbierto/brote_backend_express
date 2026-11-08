@@ -52,8 +52,9 @@ async function conCursoDelAutor<T>(
   });
 }
 
-// Toda escritura en el contenido pasa por aquí. Un curso rechazado es un borrador.
-async function conCursoEditable<T>(
+// Toda escritura en el contenido pasa por aquí. Un curso rechazado es un borrador. La usa
+// también servicios/imagenes.ts: subir una imagen es escribir en el curso (F13).
+export async function conCursoEditable<T>(
   idAutor: string,
   idCurso: string,
   accion: (tx: Transaccion) => Promise<T>,
