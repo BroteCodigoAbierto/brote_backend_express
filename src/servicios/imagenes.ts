@@ -3,18 +3,21 @@ import { bd } from "../config/bd.ts";
 import { Prisma } from "../generado/prisma/client.ts";
 import { ErrorApi } from "../middleware/errores.ts";
 import {
-  LIMITES_IMAGENES,
+  LIMITES_ARCHIVOS,
+  MENSAJES_ARCHIVOS,
   MENSAJES_IMAGENES,
   type FormatoImagen,
   type Imagen,
 } from "../tipos/contrato.ts";
 import type { ImagenSubida } from "../validacion/imagenes.ts";
+import { limpiarArchivosSinUsar, pesoArchivosCurso } from "./archivos.ts";
 import { conCursoEditable } from "./editor.ts";
 
 // Las imágenes de los cursos (spec F13; brote_specs, research de F13, puntos 1 y 6). Los
 // bytes viven en la tabla `imagen` (decisión 0016): ninguna consulta de aquí los pide, salvo
 // traerImagen. Una imagen se usa si está en `leccion.imagenes` de su curso o es su portada;
-// lo que se deja de usar se borra al guardar, y lo que nunca se usó, al día siguiente.
+// lo que se deja de usar se borra al guardar, y lo que nunca se usó, al día siguiente (con los
+// audios, en servicios/archivos.ts). Desde F14, el espacio del curso cuenta imágenes y audios.
 
 type Transaccion = Prisma.TransactionClient;
 
@@ -65,26 +68,9 @@ export async function borrarSinUso(tx: Transaccion, idCurso: string, ids: string
   if (sobran.length > 0) await tx.imagen.deleteMany({ where: { idCurso, id: { in: sobran } } });
 }
 
-// Las de más de un día que nada usa: se subieron y nunca se guardaron. Con `idCurso`, solo
-// las de ese curso (antes de contar su espacio); sin él, las de todos (cada hora).
-export async function limpiarImagenesSinUsar(
-  idCurso?: string,
-  cliente: Transaccion = bd,
-): Promise<number> {
-  const delCurso = idCurso ? Prisma.sql`AND i.id_curso = ${idCurso}` : Prisma.empty;
-  return cliente.$executeRaw`
-    DELETE FROM imagen i
-    WHERE i.subida_en < now() - interval '1 day' ${delCurso}
-      AND NOT EXISTS (
-        SELECT 1 FROM leccion l WHERE l.id_curso = i.id_curso AND i.id = ANY (l.imagenes)
-      )
-      AND NOT EXISTS (SELECT 1 FROM curso c WHERE c.id_portada = i.id)
-  `;
-}
-
 // Sube una imagen al borrador de quien llama. El mismo archivo otra vez es la misma imagen,
 // con su `subida_en` renovado para que no se borre mientras se usa en un formulario. Con el
-// curso bloqueado, dos subidas a la vez no se pasan de los 200 MB.
+// curso bloqueado, dos subidas a la vez (de imágenes o de audios) no se pasan de los 200 MB.
 export async function subirImagen(
   idAutor: string,
   idCurso: string,
@@ -92,7 +78,7 @@ export async function subirImagen(
 ): Promise<{ imagen: Imagen; nueva: boolean }> {
   const huella = createHash("sha256").update(bytes).digest("hex");
   return conCursoEditable(idAutor, idCurso, async (tx) => {
-    await limpiarImagenesSinUsar(idCurso, tx);
+    await limpiarArchivosSinUsar(idCurso, tx);
     const existente = await tx.imagen.findUnique({
       where: { idCurso_huella: { idCurso, huella } },
       select: seleccionImagen,
@@ -101,9 +87,8 @@ export async function subirImagen(
       await tx.imagen.update({ where: { id: existente.id }, data: { subidaEn: new Date() } });
       return { imagen: aImagen(existente), nueva: false };
     }
-    const { _sum } = await tx.imagen.aggregate({ where: { idCurso }, _sum: { peso: true } });
-    if ((_sum.peso ?? 0) + bytes.length > LIMITES_IMAGENES.pesoCursoMax) {
-      throw new ErrorApi(400, MENSAJES_IMAGENES.cursoLleno);
+    if ((await pesoArchivosCurso(tx, idCurso)) + bytes.length > LIMITES_ARCHIVOS.pesoCursoMax) {
+      throw new ErrorApi(400, MENSAJES_ARCHIVOS.cursoLleno);
     }
     const imagen = await tx.imagen.create({
       data: {
