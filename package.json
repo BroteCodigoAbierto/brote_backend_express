@@ -32,6 +32,7 @@
     "sesiones:expirar": "node --env-file-if-exists=.env scripts/expirar-sesiones.ts",
     "imagenes:validacion": "node scripts/archivos-validacion.ts",
     "audios:generar": "node scripts/generar-audios-prueba.ts",
+    "audios:validacion": "node scripts/archivos-audio-validacion.ts",
     "proxy:validacion": "node scripts/proxy-validacion.ts"
   },
   "dependencies": {
