@@ -31,6 +31,7 @@
     "bd:sembrar": "node --env-file-if-exists=.env scripts/sembrar-cursos.ts",
     "sesiones:expirar": "node --env-file-if-exists=.env scripts/expirar-sesiones.ts",
     "imagenes:validacion": "node scripts/archivos-validacion.ts",
+    "audios:generar": "node scripts/generar-audios-prueba.ts",
     "proxy:validacion": "node scripts/proxy-validacion.ts"
   },
   "dependencies": {
