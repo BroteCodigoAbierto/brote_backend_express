@@ -1,5 +1,5 @@
-// Cuentas y cursos de prueba de F02, F03, F11, F12 y F13 (brote_specs, quickstart de cada
-// una, sección 1.1). Los cuatro cursos publicados copian tal
+// Cuentas y cursos de prueba de F02, F03, F11, F12, F13 y F14 (brote_specs, quickstart de
+// cada una, sección 1.1). Los cuatro cursos publicados copian tal
 // cual el título, la descripción y los títulos de las lecciones de
 // brote_specs/referencia/cursos-prototipo/, y sus actividades salen de
 // actividades-prototipo.ts. Los demás solo se publican mientras se valida el
@@ -11,6 +11,9 @@
 import {
   LIMITES_ACTIVIDADES,
   type Actividad,
+  type Audio,
+  type FormatoAudio,
+  type IdiomaCurso,
   type ImagenActividad,
 } from "../src/tipos/contrato.ts";
 import { ACTIVIDADES_PROTOTIPO } from "./actividades-prototipo.ts";
@@ -25,6 +28,7 @@ export type CursoPrueba = {
   revision?: "pendiente"; // F06: enviado a revisión
   lecciones: LeccionPrueba[]; // en orden
   portadaPrueba?: string; // F13: el nombre de una imagen de IMAGENES_PRUEBA
+  idioma?: IdiomaCurso; // F14: sin él, "es"
 };
 
 export type LeccionPrueba = { titulo: string; actividades: Actividad[] };
@@ -59,6 +63,19 @@ function imagenPrueba(nombre: string, textoAlternativo?: string): ImagenActivida
     alto: 1,
     peso: 1,
     ...(textoAlternativo && { textoAlternativo }),
+  };
+}
+
+// F14: lo mismo con un audio de audios-prueba.ts, por su nombre con extensión
+// ("escala-sube.mp3"). sembrar-cursos.ts lo crea en el curso, ya limpio.
+export const PREFIJO_AUDIO_PRUEBA = "prueba:";
+
+function audioPrueba(nombre: string): Audio {
+  return {
+    id: PREFIJO_AUDIO_PRUEBA + nombre,
+    formato: nombre.split(".").pop() as FormatoAudio,
+    duracion: 1,
+    peso: 1,
   };
 }
 
@@ -110,6 +127,7 @@ const manifiestos: CursoManifiesto[] = [
     descripcion:
       "Tus primeros pasos en japonés: hiragana, saludos, números y cómo presentarte. Sin conocimientos previos.",
     publicado: true,
+    idioma: "ja", // F14: la voz lee el hiragana
     lecciones: ["Hiragana: las vocales", "Saludos", "Números del 1 al 5", "Preséntate"],
   },
   {
@@ -604,6 +622,50 @@ const imagenesConEtiquetas: Actividad[] = [
   },
 ];
 
+// F14: exactamente 200 caracteres, en una línea (se comprueba al cargar)
+const FRASE_AL_LIMITE =
+  "Esta frase tiene exactamente doscientos caracteres para comprobar que una frase larga se ve completa en un teléfono angosto, partida en varios renglones, y que la voz la lee entera sin cortarse nunca.";
+
+if (Array.from(FRASE_AL_LIMITE).length !== LIMITES_ACTIVIDADES.fraseMax) {
+  throw new Error(`FRASE_AL_LIMITE no tiene ${LIMITES_ACTIVIDADES.fraseMax} caracteres`);
+}
+
+const escucharConLaVoz: Actividad[] = [
+  { tipo: "escucharRepetir", frase: "Buenos días, ¿cómo estás?", mostrarTexto: true },
+  { tipo: "escucharRepetir", frase: "Me gusta aprender cosas nuevas.", mostrarTexto: false },
+];
+
+const escucharConAudioPropio: Actividad[] = [
+  {
+    tipo: "escucharRepetir",
+    frase: "Do, re, mi, fa, sol",
+    mostrarTexto: true,
+    audio: audioPrueba("escala-sube.mp3"),
+  },
+  {
+    tipo: "escucharRepetir",
+    frase: "Sol, fa, mi, re, do",
+    mostrarTexto: false,
+    audio: audioPrueba("escala-baja.m4a"),
+  },
+  {
+    tipo: "escucharRepetir",
+    frase: "Do, mi, sol",
+    mostrarTexto: true,
+    audio: audioPrueba("tres-notas.wav"),
+  },
+];
+
+const escucharAlLimite: Actividad[] = [
+  { tipo: "escucharRepetir", frase: FRASE_AL_LIMITE, mostrarTexto: true },
+  {
+    tipo: "escucharRepetir",
+    frase: "Treinta segundos de notas",
+    mostrarTexto: true,
+    audio: audioPrueba("treinta-segundos.wav"),
+  },
+];
+
 const actividadesDePrueba: CursoPrueba = {
   correoAutor: AUTOR,
   titulo: "Actividades de prueba",
@@ -667,6 +729,14 @@ const actividadesDePrueba: CursoPrueba = {
     { titulo: "GIF", actividades: conGif },
     { titulo: "Imágenes al límite", actividades: imagenesAlLimite },
     { titulo: "Imágenes con etiquetas", actividades: imagenesConEtiquetas },
+    // F14, al final para no mover las posiciones que citan F03, F05 y F11 a F13
+    { titulo: "Escuchar con la voz", actividades: escucharConLaVoz },
+    { titulo: "Escuchar con audio propio", actividades: escucharConAudioPropio },
+    { titulo: "Escuchar al límite", actividades: escucharAlLimite },
+    {
+      titulo: "Escuchar con etiquetas",
+      actividades: [{ tipo: "escucharRepetir", frase: `Repite: ${HTML}`, mostrarTexto: true }],
+    },
   ],
 };
 
@@ -767,6 +837,30 @@ const extras: CursoPrueba[] = [
           frente: `Frente ${i + 1}`,
           reverso: `Reverso ${i + 1}`,
         })),
+      },
+    ],
+  },
+  {
+    // F14: la voz en otro idioma. Sin publicar, como "Actividades de prueba", para no cambiar
+    // el catálogo que citan F02 y F04
+    correoAutor: AUTOR,
+    titulo: "Inglés para viajar",
+    descripcion: "Frases para practicar el inglés de un viaje.",
+    publicado: false,
+    idioma: "en",
+    lecciones: [
+      {
+        titulo: "En el aeropuerto",
+        actividades: [
+          { tipo: "escucharRepetir", frase: "Where is the gate?", mostrarTexto: true },
+          { tipo: "escucharRepetir", frase: "Can I have a coffee, please?", mostrarTexto: false },
+          {
+            tipo: "escucharRepetir",
+            frase: "Do, re, mi, fa, sol",
+            mostrarTexto: true,
+            audio: audioPrueba("escala-sube.mp3"),
+          },
+        ],
       },
     ],
   },

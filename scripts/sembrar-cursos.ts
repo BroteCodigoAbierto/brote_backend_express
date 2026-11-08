@@ -1,6 +1,7 @@
 // Herramienta de desarrollo: deja la base con las cuentas, los cursos y las
 // actividades de prueba de F02 en adelante (quickstart de cada una, sección 1.1), con
-// las imágenes de F13 dibujadas por imagenes-prueba.ts.
+// las imágenes de F13 dibujadas por imagenes-prueba.ts y los audios de F14 de
+// audios-prueba.ts, ya limpios.
 // Correrlo otra vez regresa al estado inicial: borra los cursos de las cuentas
 // @brote.test y los vuelve a crear. Si una actividad no pasa
 // validarActividades, falla sin tocar la base.
@@ -11,16 +12,27 @@ import { createHash } from "node:crypto";
 import { auth } from "../src/config/auth.ts";
 import { bd } from "../src/config/bd.ts";
 import type { Prisma } from "../src/generado/prisma/client.ts";
-import type { Actividad, FormatoImagen, ImagenActividad } from "../src/tipos/contrato.ts";
+import type {
+  Actividad,
+  Audio,
+  FormatoAudio,
+  FormatoImagen,
+  ImagenActividad,
+} from "../src/tipos/contrato.ts";
 import {
+  idsDeAudios,
   idsDeImagenes,
+  mapearAudios,
   mapearImagenes,
   validarActividades,
 } from "../src/validacion/actividades.ts";
+import { leerAudio } from "../src/validacion/audios.ts";
 import { leerImagen } from "../src/validacion/imagenes.ts";
+import { AUDIOS_PRUEBA } from "./audios-prueba.ts";
 import {
   CUENTAS_PRUEBA,
   CURSOS_PRUEBA,
+  PREFIJO_AUDIO_PRUEBA,
   PREFIJO_IMAGEN_PRUEBA,
   type CursoPrueba,
 } from "./datos-prueba.ts";
@@ -88,11 +100,67 @@ function conImagenesCreadas(
   );
 }
 
+// F14: los nombres de los audios de prueba que usan las lecciones de un curso.
+function nombresDeAudios(curso: CursoPrueba): string[] {
+  const ids = idsDeAudios(curso.lecciones.flatMap(({ actividades }) => actividades));
+  return ids.map((id) => id.slice(PREFIJO_AUDIO_PRUEBA.length));
+}
+
+// Crea en el curso cada audio por su nombre, como lo guardaría subirlo: limpio, con su
+// duración y su huella. Devuelve nombre → audio guardado.
+async function crearAudios(
+  tx: Transaccion,
+  idCurso: string,
+  nombres: string[],
+): Promise<Map<string, Audio>> {
+  const creados = new Map<string, Audio>();
+  const porHuella = new Map<string, Audio>();
+  for (const nombre of nombres) {
+    const leido = leerAudio(AUDIOS_PRUEBA[nombre]!());
+    if (!leido)
+      throw new Error(`audios-prueba.ts no tiene un audio que se pueda leer en "${nombre}"`);
+    const { formato, duracion, limpio } = leido;
+    const huella = createHash("sha256").update(limpio).digest("hex");
+    const igual = porHuella.get(huella);
+    if (igual) {
+      creados.set(nombre, igual);
+      continue;
+    }
+    const audio = await tx.audio.create({
+      data: {
+        idCurso,
+        huella,
+        formato,
+        duracion,
+        peso: limpio.length,
+        datos: new Uint8Array(limpio),
+      },
+      select: { id: true, formato: true, duracion: true, peso: true },
+    });
+    const guardado = { ...audio, formato: audio.formato as FormatoAudio };
+    creados.set(nombre, guardado);
+    porHuella.set(huella, guardado);
+  }
+  return creados;
+}
+
+// Cambia cada referencia "prueba:<nombre>" por el audio creado.
+function conAudiosCreados(actividades: Actividad[], creados: Map<string, Audio>): Actividad[] {
+  return actividades.map((actividad) =>
+    mapearAudios(actividad, ({ id }) => creados.get(id.slice(PREFIJO_AUDIO_PRUEBA.length))!),
+  );
+}
+
 // Antes de abrir la transacción: si algo está mal, la base ni se toca.
 for (const curso of CURSOS_PRUEBA) {
   for (const nombre of nombresDeImagenes(curso)) {
     if (!IMAGENES_PRUEBA[nombre]) {
       throw new Error(`"${curso.titulo}": imagenes-prueba.ts no tiene "${nombre}"`);
+    }
+  }
+  for (const nombre of nombresDeAudios(curso)) {
+    if (!AUDIOS_PRUEBA[nombre]) {
+      throw new Error(`"${curso.titulo}": audios-prueba.ts no tiene "${nombre}"`);
     }
   }
   for (const [i, leccion] of curso.lecciones.entries()) {
@@ -123,6 +191,7 @@ try {
 
   // todo o nada: si algo falla a la mitad, la base queda como estaba
   let imagenesCreadas = 0;
+  let audiosCreados = 0;
   await bd.$transaction(
     async (tx) => {
       // las lecciones se borran en cascada
@@ -134,21 +203,25 @@ try {
             descripcion: curso.descripcion,
             publicado: curso.publicado,
             revision: curso.revision ?? null,
+            idioma: curso.idioma ?? "es",
             idAutor: idPorCorreo.get(curso.correoAutor)!,
           },
           select: { id: true },
         });
         const creadas = await crearImagenes(tx, idCurso, nombresDeImagenes(curso));
         imagenesCreadas += new Set([...creadas.values()].map(({ id }) => id)).size;
+        const audios = await crearAudios(tx, idCurso, nombresDeAudios(curso));
+        audiosCreados += new Set([...audios.values()].map(({ id }) => id)).size;
         await tx.leccion.createMany({
           data: curso.lecciones.map(({ titulo, actividades }, i) => {
-            const conImagenes = conImagenesCreadas(actividades, creadas);
+            const conArchivos = conAudiosCreados(conImagenesCreadas(actividades, creadas), audios);
             return {
               idCurso,
               titulo,
               posicion: i + 1,
-              actividades: conImagenes as unknown as Prisma.InputJsonValue,
-              imagenes: idsDeImagenes(conImagenes),
+              actividades: conArchivos as unknown as Prisma.InputJsonValue,
+              imagenes: idsDeImagenes(conArchivos),
+              audios: idsDeAudios(conArchivos),
             };
           }),
         });
@@ -169,7 +242,7 @@ try {
     0,
   );
   console.log(
-    `${CURSOS_PRUEBA.length} cursos de prueba creados; ${publicados} publicados; ${actividades} actividades; ${imagenesCreadas} imágenes`,
+    `${CURSOS_PRUEBA.length} cursos de prueba creados; ${publicados} publicados; ${actividades} actividades; ${imagenesCreadas} imágenes; ${audiosCreados} audios`,
   );
 } finally {
   await bd.$disconnect();
