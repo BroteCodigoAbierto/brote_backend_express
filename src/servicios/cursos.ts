@@ -23,6 +23,7 @@ type FilaCatalogo = {
   idAutor: string;
   nombreAutor: string;
   cantidadLecciones: number;
+  idPortada: string | null;
   clave: string;
 };
 
@@ -33,6 +34,7 @@ function aResumenCurso(fila: FilaCatalogo): ResumenCurso {
     descripcion: fila.descripcion,
     autor: { id: fila.idAutor, nombre: fila.nombreAutor },
     cantidadLecciones: fila.cantidadLecciones,
+    idPortada: fila.idPortada,
   };
 }
 
@@ -69,7 +71,7 @@ export async function traerCatalogo({
   // compara con COLLATE "C" para ordenar igual en cualquier servidor. Se pide
   // uno de más para saber si quedan cursos.
   const filas = await bd.$queryRaw<FilaCatalogo[]>`
-    SELECT id, titulo, descripcion, "creadoEn", "idAutor", "nombreAutor", "cantidadLecciones", clave
+    SELECT id, titulo, descripcion, "creadoEn", "idAutor", "nombreAutor", "cantidadLecciones", "idPortada", clave
     FROM (
       SELECT
         c.id,
@@ -79,6 +81,7 @@ export async function traerCatalogo({
         u.id AS "idAutor",
         u.name AS "nombreAutor",
         (SELECT count(*)::int FROM leccion l WHERE l.id_curso = c.id) AS "cantidadLecciones",
+        c.id_portada AS "idPortada",
         regexp_replace(lower(unaccent(c.titulo)), '^[^[:alnum:]]+', '') AS clave,
         lower(unaccent(c.titulo || ' ' || c.descripcion || ' ' || u.name)) AS texto
       FROM curso c
@@ -103,6 +106,7 @@ function seleccionDetalle(idUsuario: string) {
     id: true,
     titulo: true,
     descripcion: true,
+    idPortada: true,
     autor: { select: { id: true, name: true } },
     lecciones: {
       orderBy: { posicion: "asc" },
@@ -130,6 +134,7 @@ function aDetalleCurso(curso: CursoConLecciones): DetalleCurso {
     descripcion: curso.descripcion,
     autor: { id: curso.autor.id, nombre: curso.autor.name },
     cantidadLecciones: curso.lecciones.length,
+    idPortada: curso.idPortada,
     lecciones: curso.lecciones.map(({ id, titulo, posicion, progresos }) => ({
       id,
       titulo,
