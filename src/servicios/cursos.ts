@@ -5,6 +5,7 @@ import {
   LIMITES_CATALOGO,
   MENSAJES_CATALOGO,
   type DetalleCurso,
+  type IdiomaCurso,
   type RespuestaCatalogo,
   type ResumenCurso,
 } from "../tipos/contrato.ts";
@@ -107,6 +108,7 @@ function seleccionDetalle(idUsuario: string) {
     titulo: true,
     descripcion: true,
     idPortada: true,
+    idioma: true, // F14
     autor: { select: { id: true, name: true } },
     lecciones: {
       orderBy: { posicion: "asc" },
@@ -135,6 +137,8 @@ function aDetalleCurso(curso: CursoConLecciones): DetalleCurso {
     autor: { id: curso.autor.id, nombre: curso.autor.name },
     cantidadLecciones: curso.lecciones.length,
     idPortada: curso.idPortada,
+    // el CHECK de la migración solo deja los de IDIOMAS_CURSO
+    idioma: curso.idioma as IdiomaCurso,
     lecciones: curso.lecciones.map(({ id, titulo, posicion, progresos }) => ({
       id,
       titulo,

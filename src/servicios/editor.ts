@@ -2,8 +2,10 @@ import { bd } from "../config/bd.ts";
 import type { Prisma } from "../generado/prisma/client.ts";
 import { ErrorApi } from "../middleware/errores.ts";
 import {
+  LIMITES_ARCHIVOS,
   LIMITES_CURSO,
-  LIMITES_IMAGENES,
+  MENSAJES_ARCHIVOS,
+  MENSAJES_AUDIOS,
   MENSAJES_CATALOGO,
   MENSAJES_EDITOR,
   MENSAJES_IMAGENES,
@@ -15,10 +17,20 @@ import {
   type CursoDelAutor,
   type CursoEnEditor,
   type EstadoCurso,
+  type IdiomaCurso,
   type LeccionEnEditor,
   type LeccionEnMapa,
 } from "../tipos/contrato.ts";
-import { idsDeImagenes, imagenesDeActividad, mapearImagenes } from "../validacion/actividades.ts";
+import {
+  audiosDeActividad,
+  idsDeAudios,
+  idsDeImagenes,
+  imagenesDeActividad,
+  mapearAudios,
+  mapearImagenes,
+} from "../validacion/actividades.ts";
+import { pesoArchivosCurso } from "./archivos.ts";
+import { audiosDelCurso, borrarAudiosSinUso } from "./audios.ts";
 import { aImagen, borrarSinUso, imagenesDelCurso, seleccionImagen } from "./imagenes.ts";
 
 // El editor de cursos (spec F05). Aquí no llega nada sin validar: el cuerpo lo
@@ -105,24 +117,20 @@ async function tocarCurso(tx: Transaccion, idCurso: string) {
 
 // Las actividades se cuentan en la base, para no traerlas todas al mapa.
 async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise<CursoEnEditor> {
-  const { id, titulo, descripcion, publicado, revision, motivoRechazo, portada } =
+  const { id, titulo, descripcion, idioma, publicado, revision, motivoRechazo, portada } =
     await cliente.curso.findUniqueOrThrow({
       where: { id: idCurso },
       select: {
         id: true,
         titulo: true,
         descripcion: true,
+        idioma: true,
         publicado: true,
         revision: true,
         motivoRechazo: true,
         portada: { select: seleccionImagen },
       },
     });
-  // F13: lo que usa más lo que se subió y aún no se guarda (research de F13, punto 6)
-  const { _sum } = await cliente.imagen.aggregate({
-    where: { idCurso },
-    _sum: { peso: true },
-  });
   const lecciones = await cliente.$queryRaw<LeccionEnMapa[]>`
     SELECT id, titulo, posicion, jsonb_array_length(actividades) AS "cantidadActividades"
     FROM leccion
@@ -133,11 +141,14 @@ async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise
     id,
     titulo,
     descripcion,
+    // el CHECK de la migración solo deja los de IDIOMAS_CURSO
+    idioma: idioma as IdiomaCurso,
     estado: estadoDelCurso({ publicado, revision }),
     revisionRechazada: revision === "rechazada",
     motivoRechazo,
     portada: portada ? aImagen(portada) : null,
-    pesoImagenes: _sum.peso ?? 0,
+    // F13 y F14: imágenes y audios, lo que usa más lo que se subió y aún no se guarda
+    pesoArchivos: await pesoArchivosCurso(cliente, idCurso),
     lecciones,
   };
 }
@@ -167,21 +178,23 @@ export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAuto
   }));
 }
 
+// F14: sin idioma, en español (el default de la columna).
 export async function crearCurso(
   idAutor: string,
-  { titulo, descripcion }: CuerpoDatosCurso,
+  { titulo, descripcion, idioma }: CuerpoDatosCurso,
 ): Promise<CursoEnEditor> {
   const curso = await bd.curso.create({
-    data: { titulo, descripcion, idAutor },
-    select: { id: true, titulo: true, descripcion: true },
+    data: { titulo, descripcion, idAutor, ...(idioma && { idioma }) },
+    select: { id: true, titulo: true, descripcion: true, idioma: true },
   });
   return {
     ...curso,
+    idioma: curso.idioma as IdiomaCurso,
     estado: "borrador",
     revisionRechazada: false,
     motivoRechazo: null,
     portada: null,
-    pesoImagenes: 0,
+    pesoArchivos: 0,
     lecciones: [],
   };
 }
@@ -211,11 +224,11 @@ async function comprobarPortada(tx: Transaccion, idCurso: string, idPortada: str
 }
 
 // Sin idPortada la portada no cambia; con null se quita. La anterior se borra si nada más
-// del curso la usa.
+// del curso la usa. Sin idioma, tampoco cambia (F14).
 export async function actualizarCurso(
   idAutor: string,
   idCurso: string,
-  { titulo, descripcion, idPortada }: CuerpoDatosCurso,
+  { titulo, descripcion, idPortada, idioma }: CuerpoDatosCurso,
 ): Promise<CursoEnEditor> {
   return conCursoEditable(idAutor, idCurso, async (tx) => {
     const antes = await tx.curso.findUniqueOrThrow({
@@ -225,7 +238,12 @@ export async function actualizarCurso(
     if (idPortada) await comprobarPortada(tx, idCurso, idPortada);
     await tx.curso.update({
       where: { id: idCurso },
-      data: { titulo, descripcion, ...(idPortada !== undefined && { idPortada }) },
+      data: {
+        titulo,
+        descripcion,
+        ...(idPortada !== undefined && { idPortada }),
+        ...(idioma && { idioma }),
+      },
     });
     if (idPortada !== undefined && antes.idPortada && antes.idPortada !== idPortada) {
       await borrarSinUso(tx, idCurso, [antes.idPortada]);
@@ -338,7 +356,7 @@ export async function borrarLeccion(
   await conCursoEditable(idAutor, idCurso, async (tx) => {
     const leccion = await tx.leccion.findFirst({
       where: { id: idLeccion, idCurso },
-      select: { imagenes: true },
+      select: { imagenes: true, audios: true },
     });
     if (!leccion) throw new ErrorApi(404, MENSAJES_EDITOR.leccionEliminada);
     await tx.leccion.delete({ where: { id: idLeccion } });
@@ -352,8 +370,9 @@ export async function borrarLeccion(
       idCurso,
       quedan.map(({ id }) => id),
     );
-    // F13: sus imágenes, si ninguna otra lección ni la portada las usan
+    // F13 y F14: sus imágenes y sus audios, si nada más del curso los usa
     await borrarSinUso(tx, idCurso, leccion.imagenes);
+    await borrarAudiosSinUso(tx, idCurso, leccion.audios);
     await tocarCurso(tx, idCurso);
   });
 }
@@ -364,15 +383,18 @@ const seleccionLeccion = {
   posicion: true,
   actividades: true,
   version: true,
+  curso: { select: { idioma: true } }, // F14
 } satisfies Prisma.LeccionSelect;
 
 type FilaLeccion = Prisma.LeccionGetPayload<{ select: typeof seleccionLeccion }>;
 
-function aLeccionEnEditor(leccion: FilaLeccion): LeccionEnEditor {
+function aLeccionEnEditor({ curso, ...leccion }: FilaLeccion): LeccionEnEditor {
   return {
     ...leccion,
     // la columna solo se escribe después de validarActividades
     actividades: leccion.actividades as unknown as Actividad[],
+    // el de su curso: la vista previa lee las frases con su voz (F14)
+    idioma: curso.idioma as IdiomaCurso,
   };
 }
 
@@ -392,13 +414,13 @@ export async function traerLeccionEnEditor(
 
 // F13: cada imagen de las actividades tiene que ser de este curso; si alguna no lo es (se
 // borró o es de otro curso), el 400 dice la primera actividad que la usa y cada id que falta,
-// para que el editor marque sus campos. Las de la lección pesan hasta 25 MB. Devuelve las
-// actividades con los datos de la base en cada imagen: el cliente no puede mentir el peso.
+// para que el editor marque sus campos. Devuelve las actividades con los datos de la base en
+// cada imagen (el cliente no puede mentir el peso) y lo que pesan sus imágenes, sin repetir.
 async function conImagenesDelCurso(
   tx: Transaccion,
   idCurso: string,
   actividades: Actividad[],
-): Promise<Actividad[]> {
+): Promise<{ actividades: Actividad[]; peso: number }> {
   const ids = idsDeImagenes(actividades);
   const delCurso = new Map(
     (await imagenesDelCurso(tx, idCurso, ids)).map((imagen) => [imagen.id, imagen]),
@@ -413,21 +435,50 @@ async function conImagenesDelCurso(
       ...Object.fromEntries(faltan.map((id) => [`imagenes.${id}`, MENSAJES_IMAGENES.imagenNoEsta])),
     });
   }
-  const peso = [...delCurso.values()].reduce((total, imagen) => total + imagen.peso, 0);
-  if (peso > LIMITES_IMAGENES.pesoLeccionMax) {
-    throw new ErrorApi(400, MENSAJES_IMAGENES.leccionPesada);
-  }
-  return actividades.map((actividad) =>
-    mapearImagenes(actividad, ({ id, textoAlternativo }) => ({
-      ...delCurso.get(id)!,
-      ...(textoAlternativo !== undefined && { textoAlternativo }),
-    })),
+  return {
+    actividades: actividades.map((actividad) =>
+      mapearImagenes(actividad, ({ id, textoAlternativo }) => ({
+        ...delCurso.get(id)!,
+        ...(textoAlternativo !== undefined && { textoAlternativo }),
+      })),
+    ),
+    peso: [...delCurso.values()].reduce((total, imagen) => total + imagen.peso, 0),
+  };
+}
+
+// F14: lo mismo con los audios. Cada uno, de este curso, y con su formato, su duración y su
+// peso de la base.
+async function conAudiosDelCurso(
+  tx: Transaccion,
+  idCurso: string,
+  actividades: Actividad[],
+): Promise<{ actividades: Actividad[]; peso: number }> {
+  const ids = idsDeAudios(actividades);
+  const delCurso = new Map(
+    (await audiosDelCurso(tx, idCurso, ids)).map((audio) => [audio.id, audio]),
   );
+  const faltan = ids.filter((id) => !delCurso.has(id));
+  if (faltan.length > 0) {
+    const indice = actividades.findIndex((actividad) =>
+      audiosDeActividad(actividad).some(({ id }) => faltan.includes(id)),
+    );
+    throw new ErrorApi(400, MENSAJES_EDITOR.datosInvalidos, {
+      [`actividades.${indice}`]: `actividad ${indice + 1} (${actividades[indice]?.tipo}): un audio ya no está`,
+      ...Object.fromEntries(faltan.map((id) => [`audios.${id}`, MENSAJES_AUDIOS.audioNoEsta])),
+    });
+  }
+  return {
+    actividades: actividades.map((actividad) =>
+      mapearAudios(actividad, ({ id }) => delCurso.get(id)!),
+    ),
+    peso: [...delCurso.values()].reduce((total, audio) => total + audio.peso, 0),
+  };
 }
 
 // Reemplaza el título y todas las actividades. Con otra `version`, otra pestaña
-// guardó antes: no se pisa nada salvo que el autor lo pida con `reemplazar`. Las imágenes
-// que tenía y ya no tiene se borran si nada más del curso las usa (F13).
+// guardó antes: no se pisa nada salvo que el autor lo pida con `reemplazar`. Sus imágenes y
+// audios pesan, entre todos y sin repetir, hasta 25 MB. Los que tenía y ya no tiene se
+// borran si nada más del curso los usa (F13, F14).
 export async function guardarLeccion(
   idAutor: string,
   idCurso: string,
@@ -437,20 +488,26 @@ export async function guardarLeccion(
   return conCursoEditable(idAutor, idCurso, async (tx) => {
     const actual = await tx.leccion.findFirst({
       where: { id: idLeccion, idCurso },
-      select: { version: true, imagenes: true },
+      select: { version: true, imagenes: true, audios: true },
     });
     if (!actual) throw new ErrorApi(404, MENSAJES_EDITOR.leccionEliminada);
     if (!reemplazar && actual.version !== version) {
       throw new ErrorApi(409, MENSAJES_EDITOR.versionMasNueva);
     }
     const conImagenes = await conImagenesDelCurso(tx, idCurso, actividades);
-    const ids = idsDeImagenes(conImagenes);
+    const conAudios = await conAudiosDelCurso(tx, idCurso, conImagenes.actividades);
+    if (conImagenes.peso + conAudios.peso > LIMITES_ARCHIVOS.pesoLeccionMax) {
+      throw new ErrorApi(400, MENSAJES_ARCHIVOS.leccionPesada);
+    }
+    const idsImagenes = idsDeImagenes(conAudios.actividades);
+    const idsAudios = idsDeAudios(conAudios.actividades);
     const leccion = await tx.leccion.update({
       where: { id: idLeccion },
       data: {
         titulo,
-        actividades: conImagenes as unknown as Prisma.InputJsonValue,
-        imagenes: ids,
+        actividades: conAudios.actividades as unknown as Prisma.InputJsonValue,
+        imagenes: idsImagenes,
+        audios: idsAudios,
         version: { increment: 1 },
       },
       select: seleccionLeccion,
@@ -458,7 +515,12 @@ export async function guardarLeccion(
     await borrarSinUso(
       tx,
       idCurso,
-      actual.imagenes.filter((id) => !ids.includes(id)),
+      actual.imagenes.filter((id) => !idsImagenes.includes(id)),
+    );
+    await borrarAudiosSinUso(
+      tx,
+      idCurso,
+      actual.audios.filter((id) => !idsAudios.includes(id)),
     );
     await tocarCurso(tx, idCurso);
     return aLeccionEnEditor(leccion);
