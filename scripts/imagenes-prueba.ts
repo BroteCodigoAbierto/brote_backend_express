@@ -54,8 +54,16 @@ function distanciaASegmento([x, y]: Punto, [ax, ay]: Punto, [bx, by]: Punto): nu
   return Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
 }
 
-// Pinta con 4 muestras por pixel, para que los bordes no salgan en escalera.
-function pintar(lienzo: Lienzo, color: Color, cubre: (punto: Punto) => boolean) {
+type Caja = [number, number, number, number]; // x0, y0, x1, y1
+
+// Pinta con 4 muestras por pixel, para que los bordes no salgan en escalera. Solo recorre
+// la caja de la figura: en una foto de 4000 × 3000 recorrer todo sería lento.
+function pintar(
+  lienzo: Lienzo,
+  color: Color,
+  cubre: (punto: Punto) => boolean,
+  [x0, y0, x1, y1]: Caja = [0, 0, lienzo.ancho, lienzo.alto],
+) {
   const [r, g, b] = COLORES[color];
   const muestras: Punto[] = [
     [0.25, 0.25],
@@ -63,8 +71,8 @@ function pintar(lienzo: Lienzo, color: Color, cubre: (punto: Punto) => boolean) 
     [0.25, 0.75],
     [0.75, 0.75],
   ];
-  for (let y = 0; y < lienzo.alto; y++) {
-    for (let x = 0; x < lienzo.ancho; x++) {
+  for (let y = Math.max(0, Math.floor(y0)); y < Math.min(lienzo.alto, Math.ceil(y1)); y++) {
+    for (let x = Math.max(0, Math.floor(x0)); x < Math.min(lienzo.ancho, Math.ceil(x1)); x++) {
       const dentro = muestras.filter(([mx, my]) => cubre([x + mx, y + my])).length;
       if (dentro === 0) continue;
       const i = (y * lienzo.ancho + x) * 4;
@@ -112,13 +120,14 @@ function verticesDe({ forma, lados = 3, centro: [cx, cy], radio }: Figura): Punt
 export function dibujarFigura(lienzo: Lienzo, figura: Figura) {
   const { forma, color, relleno, centro, radio } = figura;
   const [cx, cy] = centro;
+  const caja: Caja = [cx - radio - 1, cy - radio - 1, cx + radio + 1, cy + radio + 1];
   if (forma === "circulo" || forma === "ovalo") {
     const rx = radio;
     const ry = forma === "ovalo" ? radio * 0.62 : radio;
     const nivel = ([x, y]: Punto) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
     const interior = ([x, y]: Punto) =>
       ((x - cx) / (rx - GROSOR)) ** 2 + ((y - cy) / (ry - GROSOR)) ** 2 < 1;
-    pintar(lienzo, color, (p) => nivel(p) < 1 && (relleno || !interior(p)));
+    pintar(lienzo, color, (p) => nivel(p) < 1 && (relleno || !interior(p)), caja);
     return;
   }
   const vertices = verticesDe(figura);
@@ -126,7 +135,12 @@ export function dibujarFigura(lienzo: Lienzo, figura: Figura) {
     vertices.some(
       (v, i) => distanciaASegmento(p, v, vertices[(i + 1) % vertices.length]!) < GROSOR,
     );
-  pintar(lienzo, color, (p) => dentroDePoligono(p, vertices) && (relleno || cercaDelBorde(p)));
+  pintar(
+    lienzo,
+    color,
+    (p) => dentroDePoligono(p, vertices) && (relleno || cercaDelBorde(p)),
+    caja,
+  );
 }
 
 function rectangulo(
@@ -137,7 +151,12 @@ function rectangulo(
   ancho: number,
   alto: number,
 ) {
-  pintar(lienzo, color, ([px, py]) => px >= x && px < x + ancho && py >= y && py < y + alto);
+  pintar(lienzo, color, ([px, py]) => px >= x && px < x + ancho && py >= y && py < y + alto, [
+    x,
+    y,
+    x + ancho,
+    y + alto,
+  ]);
 }
 
 // ---------------------------------------------------------------------------
