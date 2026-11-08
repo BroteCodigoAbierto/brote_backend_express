@@ -1,4 +1,4 @@
-// Cuentas y cursos de prueba de F02, F03, F11 y F12 (brote_specs, quickstart de cada
+// Cuentas y cursos de prueba de F02, F03, F11, F12 y F13 (brote_specs, quickstart de cada
 // una, sección 1.1). Los cuatro cursos publicados copian tal
 // cual el título, la descripción y los títulos de las lecciones de
 // brote_specs/referencia/cursos-prototipo/, y sus actividades salen de
@@ -8,7 +8,11 @@
 // Ningún curso extra usa en su texto las palabras de los criterios de búsqueda
 // (git, japones, programacion, flex, sencill, cocina, equipo, brote).
 
-import { LIMITES_ACTIVIDADES, type Actividad } from "../src/tipos/contrato.ts";
+import {
+  LIMITES_ACTIVIDADES,
+  type Actividad,
+  type ImagenActividad,
+} from "../src/tipos/contrato.ts";
 import { ACTIVIDADES_PROTOTIPO } from "./actividades-prototipo.ts";
 
 export type CuentaPrueba = { correo: string; nombre: string; contrasena: string };
@@ -20,6 +24,7 @@ export type CursoPrueba = {
   publicado: boolean;
   revision?: "pendiente"; // F06: enviado a revisión
   lecciones: LeccionPrueba[]; // en orden
+  portadaPrueba?: string; // F13: el nombre de una imagen de IMAGENES_PRUEBA
 };
 
 export type LeccionPrueba = { titulo: string; actividades: Actividad[] };
@@ -40,6 +45,22 @@ export const CUENTAS_PRUEBA: CuentaPrueba[] = [
   { correo: CREADOR, nombre: "Cuenta A", contrasena: "brote12345" },
   { correo: CREADOR_2, nombre: "Cuenta B", contrasena: "brote12345" },
 ];
+
+// F13: una imagen de imagenes-prueba.ts por su nombre. Los datos de aquí solo pasan
+// validarActividades: sembrar-cursos.ts crea la imagen en el curso y los cambia por los
+// verdaderos.
+export const PREFIJO_IMAGEN_PRUEBA = "prueba:";
+
+function imagenPrueba(nombre: string, textoAlternativo?: string): ImagenActividad {
+  return {
+    id: PREFIJO_IMAGEN_PRUEBA + nombre,
+    formato: "png",
+    ancho: 1,
+    alto: 1,
+    peso: 1,
+    ...(textoAlternativo && { textoAlternativo }),
+  };
+}
 
 function sinActividades(titulos: string[]): LeccionPrueba[] {
   return titulos.map((titulo) => ({ titulo, actividades: [] }));
@@ -403,11 +424,192 @@ const codigoAlLimite: Actividad[] = [
   },
 ];
 
+// F13: las seis lecciones de imágenes (brote_specs, quickstart de F13, sección 1.1)
+const teoriaConImagenes: Actividad[] = [
+  {
+    tipo: "teoria",
+    titulo: "Imágenes entre párrafos",
+    texto:
+      "Primer párrafo, antes del panorama.\n\n[imagen]\n\nSegundo párrafo, con una imagen chica [imagen] a la mitad.\n\nTercer párrafo, después de las dos imágenes.",
+    puntosClave: ["Las imágenes van en el texto, antes de los puntos clave"],
+    imagenes: [
+      imagenPrueba("panorama", "Panorama con un círculo a la izquierda y un cuadrado a la derecha"),
+      imagenPrueba("chica"),
+    ],
+  },
+  {
+    tipo: "teoria",
+    titulo: "Solo una imagen alta",
+    texto: "[imagen]",
+    imagenes: [imagenPrueba("alta", "Columna de cuatro figuras")],
+  },
+  {
+    tipo: "teoria",
+    titulo: "Cinco imágenes",
+    texto:
+      "Uno:\n\n[imagen]\n\nDos:\n\n[imagen]\n\nTres:\n\n[imagen]\n\nCuatro:\n\n[imagen]\n\nCinco:\n\n[imagen]",
+    imagenes: [
+      imagenPrueba("circulo-rojo", "Círculo rojo"),
+      imagenPrueba("cuadrado-azul", "Cuadrado azul"),
+      imagenPrueba("triangulo-verde", "Triángulo verde"),
+      imagenPrueba("estrella-amarilla", "Estrella amarilla"),
+      imagenPrueba("ovalo-morado", "Óvalo morado"),
+    ],
+  },
+];
+
+const opcionMultipleConImagenes: Actividad[] = [
+  {
+    tipo: "opcionMultiple",
+    pregunta: "¿Qué figura es esta?",
+    imagen: imagenPrueba("circulo-rojo", "Círculo rojo"),
+    opciones: [{ texto: "Círculo" }, { texto: "Cuadrado" }, { texto: "Triángulo" }],
+    correcta: 0,
+  },
+  {
+    tipo: "opcionMultiple",
+    pregunta: "¿Cuál es el cuadrado azul?",
+    opciones: [
+      { imagen: imagenPrueba("circulo-rojo", "Círculo rojo") },
+      { imagen: imagenPrueba("cuadrado-azul", "Cuadrado azul") },
+      { imagen: imagenPrueba("triangulo-verde", "Triángulo verde") },
+      { imagen: imagenPrueba("estrella-amarilla", "Estrella amarilla") },
+    ],
+    correcta: 1,
+  },
+  {
+    tipo: "opcionMultiple",
+    pregunta: "¿Cuál es el triángulo?",
+    opciones: [
+      { imagen: imagenPrueba("circulo-rojo") },
+      { imagen: imagenPrueba("triangulo-verde") },
+      { imagen: imagenPrueba("cuadrado-azul") },
+    ],
+    correcta: 1,
+  },
+];
+
+const relacionarConImagenes: Actividad[] = [
+  {
+    tipo: "emparejar",
+    consigna: "Une cada figura con su nombre",
+    parejas: [
+      { izquierda: imagenPrueba("circulo-rojo", "Círculo rojo"), derecha: "Círculo" },
+      { izquierda: imagenPrueba("cuadrado-azul", "Cuadrado azul"), derecha: "Cuadrado" },
+      { izquierda: imagenPrueba("triangulo-verde", "Triángulo verde"), derecha: "Triángulo" },
+      { izquierda: imagenPrueba("estrella-amarilla", "Estrella amarilla"), derecha: "Estrella" },
+    ],
+  },
+  {
+    tipo: "emparejar",
+    consigna: "Une cada figura con su contorno",
+    parejas: [
+      { izquierda: imagenPrueba("circulo-rojo"), derecha: imagenPrueba("circulo-contorno") },
+      { izquierda: imagenPrueba("cuadrado-azul"), derecha: imagenPrueba("cuadrado-contorno") },
+      { izquierda: imagenPrueba("triangulo-verde"), derecha: imagenPrueba("triangulo-contorno") },
+    ],
+  },
+  {
+    tipo: "clasificar",
+    consigna: "¿Tiene esquinas?",
+    categorias: ["Tiene esquinas", "No tiene esquinas"],
+    elementos: [
+      { imagen: imagenPrueba("cuadrado-azul", "Cuadrado azul"), categoria: 0 },
+      { imagen: imagenPrueba("triangulo-verde", "Triángulo verde"), categoria: 0 },
+      { imagen: imagenPrueba("circulo-rojo", "Círculo rojo"), categoria: 1 },
+      { imagen: imagenPrueba("ovalo-morado", "Óvalo morado"), categoria: 1 },
+    ],
+  },
+  {
+    tipo: "ordenar",
+    consigna: "Ordena de menos a más lados",
+    elementos: [
+      imagenPrueba("triangulo-verde", "Triángulo"),
+      imagenPrueba("cuadrado-azul", "Cuadrado"),
+      imagenPrueba("pentagono-naranja", "Pentágono"),
+      imagenPrueba("hexagono-turquesa", "Hexágono"),
+    ],
+  },
+];
+
+const conGif: Actividad[] = [
+  {
+    tipo: "teoria",
+    titulo: "Un GIF",
+    texto: "Este círculo se mueve:\n\n[imagen]",
+    imagenes: [imagenPrueba("gif-circulo", "Un círculo que va y viene")],
+  },
+  {
+    tipo: "opcionMultiple",
+    pregunta: "¿Cuál se mueve?",
+    opciones: [
+      { imagen: imagenPrueba("gif-circulo", "Círculo que se mueve") },
+      { imagen: imagenPrueba("circulo-rojo", "Círculo quieto") },
+      { imagen: imagenPrueba("cuadrado-azul", "Cuadrado quieto") },
+    ],
+    correcta: 0,
+  },
+];
+
+function poligonos(desde: number, hasta: number, contorno = false): ImagenActividad[] {
+  return Array.from({ length: hasta - desde + 1 }, (_, i) =>
+    imagenPrueba(`poligono-${desde + i}${contorno ? "-contorno" : ""}`),
+  );
+}
+
+const COLORES_CLASIFICAR = ["rojo", "azul", "verde", "amarillo"];
+
+const imagenesAlLimite: Actividad[] = [
+  {
+    tipo: "opcionMultiple",
+    pregunta: "¿Cuál tiene 7 lados?",
+    opciones: poligonos(3, 11).map((imagen) => ({ imagen })),
+    correcta: 4,
+  },
+  {
+    tipo: "emparejar",
+    consigna: "Une cada polígono con su contorno",
+    parejas: poligonos(3, 10).map((izquierda, i) => ({
+      izquierda,
+      derecha: poligonos(3, 10, true)[i]!,
+    })),
+  },
+  {
+    tipo: "clasificar",
+    consigna: "Clasifica por color",
+    categorias: ["Rojas", "Azules", "Verdes", "Amarillas"],
+    elementos: COLORES_CLASIFICAR.flatMap((color, categoria) =>
+      ["circulo", "cuadrado", "triangulo"].map((forma) => ({
+        imagen: imagenPrueba(`${forma}-${color}`),
+        categoria,
+      })),
+    ),
+  },
+  {
+    tipo: "ordenar",
+    consigna: "Ordena de menos a más lados",
+    elementos: poligonos(3, 12),
+  },
+];
+
+const imagenesConEtiquetas: Actividad[] = [
+  {
+    tipo: "opcionMultiple",
+    pregunta: "¿Cuál es la correcta?",
+    opciones: [
+      { imagen: imagenPrueba("circulo-rojo", "<b>hola</b>") },
+      { imagen: imagenPrueba("cuadrado-azul", "<script>alert(1)</script>") },
+    ],
+    correcta: 1,
+  },
+];
+
 const actividadesDePrueba: CursoPrueba = {
   correoAutor: AUTOR,
   titulo: "Actividades de prueba",
   descripcion: "Curso para comprobar a mano los tipos de actividad.",
   publicado: false,
+  portadaPrueba: "portada",
   lecciones: [
     {
       titulo: "Respuestas con acentos",
@@ -458,6 +660,13 @@ const actividadesDePrueba: CursoPrueba = {
         },
       ],
     },
+    // F13, al final para no mover las posiciones que citan F03, F05, F11 y F12
+    { titulo: "Teoría con imágenes", actividades: teoriaConImagenes },
+    { titulo: "Opción múltiple con imágenes", actividades: opcionMultipleConImagenes },
+    { titulo: "Relacionar con imágenes", actividades: relacionarConImagenes },
+    { titulo: "GIF", actividades: conGif },
+    { titulo: "Imágenes al límite", actividades: imagenesAlLimite },
+    { titulo: "Imágenes con etiquetas", actividades: imagenesConEtiquetas },
   ],
 };
 
