@@ -1,5 +1,6 @@
 import { ErrorApi } from "../middleware/errores.ts";
 import {
+  IDIOMAS_CURSO,
   LIMITES_CURSO,
   LIMITES_LECCION,
   MENSAJES_EDITOR,
@@ -8,6 +9,7 @@ import {
   type CuerpoGuardarLeccion,
   type CuerpoNuevaLeccion,
   type CuerpoOrdenLecciones,
+  type IdiomaCurso,
   type ImagenActividad,
 } from "../tipos/contrato.ts";
 import { ErrorActividades, mapearImagenes, validarActividades } from "./actividades.ts";
@@ -56,19 +58,37 @@ function idPortadaDe(cuerpo: unknown): { valor?: string | null; error?: string }
   return { error: MENSAJES_EDITOR.datosInvalidos };
 }
 
+// F14: sin idioma no cambia (el POST crea el curso en "es"); si viene, es uno de la lista. Lo
+// ve solo quien salta la web, cuya lista no deja elegir otro.
+function idiomaDe(cuerpo: unknown): { valor?: IdiomaCurso; error?: string } {
+  if (!esObjeto(cuerpo) || !("idioma" in cuerpo)) return {};
+  const { idioma } = cuerpo;
+  if ((IDIOMAS_CURSO as readonly unknown[]).includes(idioma)) {
+    return { valor: idioma as IdiomaCurso };
+  }
+  return { error: MENSAJES_EDITOR.datosInvalidos };
+}
+
 // El título se guarda recortado; la descripción, tal como se escribió.
 export function validarDatosCurso(cuerpo: unknown): CuerpoDatosCurso {
   const titulo = texto(cuerpo, "titulo").trim();
   const descripcion = texto(cuerpo, "descripcion");
   const portada = idPortadaDe(cuerpo);
+  const idioma = idiomaDe(cuerpo);
   const errores: Errores = {};
   const errorTitulo = errorDeTexto(titulo, LIMITES_CURSO.tituloMax);
   const errorDescripcion = errorDeTexto(descripcion, LIMITES_CURSO.descripcionMax);
   if (errorTitulo) errores.titulo = errorTitulo;
   if (errorDescripcion) errores.descripcion = errorDescripcion;
   if (portada.error) errores.portada = portada.error;
+  if (idioma.error) errores.idioma = idioma.error;
   lanzarSiHayErrores(errores);
-  return { titulo, descripcion, ...(portada.valor !== undefined && { idPortada: portada.valor }) };
+  return {
+    titulo,
+    descripcion,
+    ...(portada.valor !== undefined && { idPortada: portada.valor }),
+    ...(idioma.valor && { idioma: idioma.valor }),
+  };
 }
 
 export function validarNuevaLeccion(cuerpo: unknown): CuerpoNuevaLeccion {
@@ -110,10 +130,10 @@ function recortarImagen(imagen: ImagenActividad): ImagenActividad {
 
 // El título de la teoría se guarda recortado, y también las fichas del banco, que se
 // comparan por su texto exacto (F11), lo que en F12 va en una sola línea (la carpeta y
-// los comandos de la terminal y los nombres de los commits y las ramas del grafo) y el
-// texto alternativo de cada imagen (F13). Los demás textos, tal como se escribieron,
-// porque muchas veces son código: el código inicial, la solución y las salidas conservan
-// su sangría.
+// los comandos de la terminal y los nombres de los commits y las ramas del grafo), el
+// texto alternativo de cada imagen (F13) y la frase de escuchar y repetir (F14). Los demás
+// textos, tal como se escribieron, porque muchas veces son código: el código inicial, la
+// solución y las salidas conservan su sangría.
 function recortarTextos(actividades: Actividad[]): Actividad[] {
   return actividades.map((original) => {
     const actividad = mapearImagenes(original, recortarImagen);
@@ -142,6 +162,9 @@ function recortarTextos(actividades: Actividad[]): Actividad[] {
         commits: actividad.commits.map((commit) => ({ ...commit, nombre: commit.nombre.trim() })),
         ramas: actividad.ramas.map((rama) => ({ ...rama, nombre: rama.nombre.trim() })),
       };
+    }
+    if (actividad.tipo === "escucharRepetir") {
+      return { ...actividad, frase: actividad.frase.trim() };
     }
     return actividad;
   });

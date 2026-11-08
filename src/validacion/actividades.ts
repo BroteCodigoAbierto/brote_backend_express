@@ -1,4 +1,5 @@
 import {
+  FORMATOS_AUDIO,
   FORMATOS_IMAGEN,
   LENGUAJES_CODIGO,
   LIMITES_ACTIVIDADES,
@@ -6,6 +7,7 @@ import {
   MARCA_ESPACIO,
   MARCA_IMAGEN,
   type Actividad,
+  type Audio,
   type CommitGrafo,
   type ContenidoElemento,
   type ImagenActividad,
@@ -142,6 +144,22 @@ function validarImagenActividad(valor: unknown, campo: string): string {
   textoOpcional(valor, "textoAlternativo", LIMITES_IMAGENES.textoAlternativoMax);
   if (typeof valor.textoAlternativo === "string") {
     deUnaLinea(valor.textoAlternativo, `${campo}: textoAlternativo`);
+  }
+  return id;
+}
+
+// Un audio dentro de una actividad (F14): aquí solo su forma, como una imagen. Que sea un audio
+// de ese curso, y sus datos verdaderos, los pone guardarLeccion. Devuelve el id.
+function validarAudioActividad(valor: unknown, campo: string): string {
+  if (!esObjeto(valor)) throw new ErrorActividad(`${campo}: debe ser un audio`);
+  soloCampos(valor, ["id", "formato", "duracion", "peso"]);
+  const { id, formato, duracion, peso } = valor;
+  if (!esTextoNoVacio(id)) throw new ErrorActividad(`${campo}: falta el id del audio`);
+  if (!(FORMATOS_AUDIO as readonly unknown[]).includes(formato)) {
+    throw new ErrorActividad(`${campo}: formato desconocido`);
+  }
+  if (![duracion, peso].every(esEnteroPositivo)) {
+    throw new ErrorActividad(`${campo}: duracion y peso deben ser enteros mayores que 0`);
   }
   return id;
 }
@@ -620,6 +638,18 @@ function validarGrafoCommits(actividad: Objeto) {
   textoOpcional(actividad, "explicacion", LIMITES_ACTIVIDADES.explicacionMax);
 }
 
+// La frase va en una línea: se dice de corrido (F14). `mostrarTexto` siempre va, sin valor
+// por defecto escondido en los clientes; el audio, solo si el autor subió uno.
+function validarEscucharRepetir(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "frase", "mostrarTexto", "audio"]);
+  textoObligatorio(actividad, "frase", LIMITES_ACTIVIDADES.fraseMax);
+  deUnaLinea(actividad.frase as string, "frase");
+  if (typeof actividad.mostrarTexto !== "boolean") {
+    throw new ErrorActividad("mostrarTexto: debe ser true o false");
+  }
+  if ("audio" in actividad) validarAudioActividad(actividad.audio, "audio");
+}
+
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
 const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   teoria: validarTeoria,
@@ -634,6 +664,7 @@ const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   retoCodigo: validarRetoCodigo,
   terminalSimulada: validarTerminalSimulada,
   grafoCommits: validarGrafoCommits,
+  escucharRepetir: validarEscucharRepetir,
 };
 
 function esTipoConocido(tipo: unknown): tipo is TipoActividad {
@@ -715,6 +746,23 @@ export function mapearImagenes(
     default:
       return actividad;
   }
+}
+
+// Los audios de una actividad ya validada (F14): solo escuchar y repetir trae uno.
+export function audiosDeActividad(actividad: Actividad): Audio[] {
+  return actividad.tipo === "escucharRepetir" && actividad.audio ? [actividad.audio] : [];
+}
+
+// Los ids de los audios de una lección, sin repetir y en orden (F14). Llenan leccion.audios.
+export function idsDeAudios(actividades: Actividad[]): string[] {
+  return [...new Set(actividades.flatMap(audiosDeActividad).map(({ id }) => id))];
+}
+
+// La misma actividad con su audio cambiado por `cambiar`: poner los datos de la base (F14).
+export function mapearAudios(actividad: Actividad, cambiar: (audio: Audio) => Audio): Actividad {
+  return actividad.tipo === "escucharRepetir" && actividad.audio
+    ? { ...actividad, audio: cambiar(actividad.audio) }
+    : actividad;
 }
 
 // Lanza ErrorActividades("actividad N (tipo): ...") en el primer problema.
