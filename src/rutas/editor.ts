@@ -1,4 +1,5 @@
-import { Router } from "express";
+import express, { Router, type NextFunction, type Request, type Response } from "express";
+import { ErrorApi } from "../middleware/errores.ts";
 import { requerirSesion, usuarioDe } from "../middleware/sesion.ts";
 import {
   actualizarCurso,
@@ -14,10 +15,15 @@ import {
   traerCursoEnEditor,
   traerLeccionEnEditor,
 } from "../servicios/editor.ts";
-import type {
-  RespuestaCursoEnEditor,
-  RespuestaLeccionEnEditor,
-  RespuestaLeccionEnMapa,
+import { subirImagen } from "../servicios/imagenes.ts";
+import {
+  LIMITES_IMAGENES,
+  MENSAJES_IMAGENES,
+  TIPO_MIME_IMAGEN,
+  type RespuestaCursoEnEditor,
+  type RespuestaImagen,
+  type RespuestaLeccionEnEditor,
+  type RespuestaLeccionEnMapa,
 } from "../tipos/contrato.ts";
 import {
   validarCuerpoLeccion,
@@ -25,16 +31,35 @@ import {
   validarNuevaLeccion,
   validarOrdenLecciones,
 } from "../validacion/editor.ts";
+import { comprobarImagenSubida } from "../validacion/imagenes.ts";
 
 // El editor de cursos (spec F05). Va aparte de /cursos, que solo entrega cursos
 // publicados a cualquiera (brote_specs, research de F05, punto 1). El autor sale
 // siempre de la sesión. Orden: sesión (401), cuerpo (400), curso (404 o 403),
 // lección (404) y versión (409). Enviar y retirar (F06) no llevan cuerpo: sesión
-// (401), curso (404), estado (409) y contenido (400). Los identificadores no se
-// validan: uno que no existe es un 404 como cualquier otro.
+// (401), curso (404), estado (409) y contenido (400). Subir una imagen (F13): sesión
+// (401), tamaño (413), formato (400), curso (404 o 403) y espacio (400). Los
+// identificadores no se validan: uno que no existe es un 404 como cualquier otro.
 export const rutasEditor = Router();
 
 type ParamsCurso = { idCurso: string };
+
+// El archivo crudo, solo en esta ruta (brote_specs, research de F13, punto 2). Un cuerpo de
+// más de 10 MB es un 413 con su mensaje, para no confundirlo con el límite del JSON.
+const lectorDeArchivo = express.raw({
+  type: Object.values(TIPO_MIME_IMAGEN),
+  limit: LIMITES_IMAGENES.pesoMax,
+});
+
+function leerArchivo(req: Request, res: Response, siguiente: NextFunction) {
+  lectorDeArchivo(req, res, (error?: unknown) => {
+    if ((error as { type?: unknown } | undefined)?.type === "entity.too.large") {
+      siguiente(new ErrorApi(413, MENSAJES_IMAGENES.imagenPesada));
+      return;
+    }
+    siguiente(error);
+  });
+}
 type ParamsLeccion = ParamsCurso & { idLeccion: string };
 
 rutasEditor.post("/cursos", requerirSesion, async (req, res) => {
@@ -88,6 +113,18 @@ rutasEditor.delete<ParamsCurso>(
       curso: await retirarDelCatalogo(usuarioDe(res).id, req.params.idCurso),
     };
     res.json(respuesta);
+  },
+);
+
+rutasEditor.post<ParamsCurso>(
+  "/cursos/:idCurso/imagenes",
+  requerirSesion,
+  leerArchivo,
+  async (req, res) => {
+    const archivo = comprobarImagenSubida(req.body, req.get("Content-Type"));
+    const { imagen, nueva } = await subirImagen(usuarioDe(res).id, req.params.idCurso, archivo);
+    const respuesta: RespuestaImagen = { imagen };
+    res.status(nueva ? 201 : 200).json(respuesta);
   },
 );
 
