@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.7.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.10.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -93,6 +93,7 @@ export type ResumenCurso = {
   descripcion: string;
   autor: AutorCurso;
   cantidadLecciones: number;
+  idPortada: string | null; // F13: sin ella, la portada generada
 };
 
 export type ResumenLeccion = {
@@ -131,6 +132,82 @@ export const MENSAJES_CATALOGO = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Imágenes (F13)
+// ---------------------------------------------------------------------------
+
+export const FORMATOS_IMAGEN = ["jpeg", "png", "webp", "gif"] as const;
+
+export type FormatoImagen = (typeof FORMATOS_IMAGEN)[number];
+
+export const TIPO_MIME_IMAGEN: Record<FormatoImagen, string> = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+// Una imagen subida a un curso. Nunca cambia: otro archivo es otra imagen.
+export type Imagen = {
+  id: string;
+  formato: FormatoImagen;
+  ancho: number; // px
+  alto: number; // px
+  peso: number; // bytes
+};
+
+// Una imagen dentro de una actividad. Al guardar, el servidor reescribe los datos de
+// Imagen con los suyos; el texto alternativo es del autor.
+export type ImagenActividad = Imagen & {
+  textoAlternativo?: string;
+};
+
+// POST /editor/cursos/:idCurso/imagenes
+export type RespuestaImagen = {
+  imagen: Imagen;
+};
+
+// GET RUTA_IMAGENES/:idImagen trae los bytes
+export const RUTA_IMAGENES = "/imagenes";
+
+// Lugar de una imagen dentro de ActividadTeoria.texto
+export const MARCA_IMAGEN = "[imagen]";
+
+// Pesos en bytes (MB de 1024 × 1024); longitudes en caracteres Unicode
+export const LIMITES_IMAGENES = {
+  pesoMax: 10 * 1024 * 1024, // JPEG, PNG y WebP, antes y después de reducirlos
+  pesoGifMax: 5 * 1024 * 1024,
+  ladoMax: 1600, // la web reduce las que no son GIF a esto
+  pesoCursoMax: 200 * 1024 * 1024,
+  pesoLeccionMax: 25 * 1024 * 1024, // el alumno las trae todas al abrirla
+  imagenesTeoriaMax: 5,
+  textoAlternativoMax: 200,
+} as const;
+
+export const MENSAJES_IMAGENES = {
+  formatoInvalido: "Elige una imagen JPEG, PNG, WebP o GIF.",
+  portadaGif: "La portada puede ser JPEG, PNG o WebP.",
+  imagenPesada: "La imagen puede pesar hasta 10 MB.",
+  gifPesado: "Un GIF puede pesar hasta 5 MB.",
+  imagenIlegible: "No se pudo leer la imagen. Elige otra.",
+  imagenGrande: "La imagen puede medir hasta 1600 px por lado.", // solo sin la web
+  // solo sin la web: el editor le quita los datos ocultos y deja quieta una animación
+  imagenSinPreparar:
+    "La imagen trae datos ocultos o una animación. Súbela desde el editor de Brote.",
+  cursoLleno: "Este curso ya tiene 200 MB de imágenes. Quita alguna y guarda para hacer espacio.",
+  leccionPesada: "Las imágenes de esta lección pesan más de 25 MB. Quita alguna.",
+  subidaFallida: "No se pudo subir la imagen. Inténtalo de nuevo.",
+  esperarSubidas: "Espera a que terminen de subir las imágenes.",
+  imagenFalta: "Elige una imagen.",
+  imagenRepetida: "Esta imagen está repetida.",
+  imagenNoEsta: "Esta imagen ya no está. Elige otra.",
+  demasiadasImagenes: "El texto puede tener hasta 5 imágenes.",
+  imagenesDeMas: "Hay más imágenes que marcas [imagen] en el texto. Quita las que sobran.",
+  sinCargar: "No se pudo cargar la imagen",
+  // GET /imagenes/:idImagen: mismo mensaje si no existe o no se puede ver
+  imagenNoDisponible: "Esta imagen no existe o ya no está disponible.",
+} as const;
+
+// ---------------------------------------------------------------------------
 // Lecciones y actividades (F03)
 // ---------------------------------------------------------------------------
 
@@ -141,9 +218,10 @@ export const MENSAJES_CATALOGO = {
 export type ActividadTeoria = {
   tipo: "teoria";
   titulo?: string;
-  texto: string; // párrafos separados por un renglón en blanco
+  texto: string; // párrafos separados por un renglón en blanco; cada MARCA_IMAGEN, una imagen
   codigo?: string; // bloque de código; las líneas con +, - o @@ se leen como diff
   puntosClave?: string[];
+  imagenes?: ImagenActividad[]; // F13: una por cada MARCA_IMAGEN del texto, en orden
 };
 
 export type ActividadTarjeta = {
@@ -152,19 +230,23 @@ export type ActividadTarjeta = {
   reverso: string;
 };
 
-// Una opción es un texto o un símbolo que se muestra en grande (p. ej. "あ").
-export type OpcionRespuesta = { texto: string } | { simbolo: string };
+// Una opción es un texto, un símbolo que se muestra en grande (p. ej. "あ") o, desde F13,
+// una imagen. Todas las de una pregunta son de la misma forma.
+export type OpcionRespuesta = { texto: string } | { simbolo: string } | { imagen: ImagenActividad };
 
 export type ActividadOpcionMultiple = {
   tipo: "opcionMultiple";
   pregunta: string;
+  imagen?: ImagenActividad; // F13: la de la pregunta
   codigo?: string;
   opciones: OpcionRespuesta[]; // en el orden del autor; los clientes las mezclan
   correcta: number; // índice en `opciones`
 };
 
 export type EspacioRespuesta = {
-  aceptadas: string[]; // la primera es la que se muestra como respuesta esperada
+  // en completar espacios, la primera es la que se muestra como respuesta esperada;
+  // en el banco de palabras, son textos de `fichas`
+  aceptadas: string[];
 };
 
 export type ActividadCompletarEspacios = {
@@ -179,12 +261,128 @@ export type ActividadPreguntaAbierta = {
   solucion: string;
 };
 
+// Un elemento de relacionar: un texto o, desde F13, una imagen. Toda una columna de
+// emparejar, y todos los elementos de ordenar, son de la misma forma.
+export type ContenidoElemento = string | ImagenActividad;
+
+export type ParejaEmparejar = {
+  izquierda: ContenidoElemento;
+  derecha: ContenidoElemento;
+};
+
+export type ActividadEmparejar = {
+  tipo: "emparejar";
+  consigna?: string; // sin ella, CONSIGNA_POR_DEFECTO
+  parejas: ParejaEmparejar[]; // la izquierda va en este orden; los clientes mezclan la derecha
+};
+
+// Todos de texto o, desde F13, todos de imagen.
+export type ElementoClasificar =
+  | { texto: string; categoria: number } // índice en `categorias`
+  | { imagen: ImagenActividad; categoria: number };
+
+export type ActividadClasificar = {
+  tipo: "clasificar";
+  consigna?: string; // sin ella, CONSIGNA_POR_DEFECTO
+  categorias: string[]; // en el orden del autor
+  elementos: ElementoClasificar[]; // los clientes los mezclan
+};
+
+export type ActividadOrdenar = {
+  tipo: "ordenar";
+  consigna: string;
+  elementos: ContenidoElemento[]; // en el orden correcto; los clientes los mezclan
+};
+
+export type ActividadBancoPalabras = {
+  tipo: "bancoPalabras";
+  consigna?: string; // sin ella, CONSIGNA_POR_DEFECTO
+  texto: string; // cada MARCA_ESPACIO es un espacio, en orden
+  fichas: string[]; // recortadas; se pueden repetir; los clientes las mezclan
+  espacios: EspacioRespuesta[]; // uno por cada MARCA_ESPACIO del texto
+};
+
+// Los lenguajes de un reto de código (F12). Solo se muestran como etiqueta: no hay
+// coloreado de sintaxis.
+export const LENGUAJES_CODIGO = [
+  "c",
+  "css",
+  "html",
+  "javascript",
+  "python",
+  "sql",
+  "bash",
+  "otro",
+] as const;
+
+export type LenguajeCodigo = (typeof LENGUAJES_CODIGO)[number];
+
+// Cómo se escribe cada uno. "otro" no se muestra al alumno.
+export const NOMBRE_LENGUAJE: Record<LenguajeCodigo, string> = {
+  c: "C",
+  css: "CSS",
+  html: "HTML",
+  javascript: "JavaScript",
+  python: "Python",
+  sql: "SQL",
+  bash: "Bash",
+  otro: "Otro",
+};
+
+export type ActividadRetoCodigo = {
+  tipo: "retoCodigo";
+  consigna: string;
+  lenguaje: LenguajeCodigo;
+  codigoInicial?: string; // con lo que empieza el campo; sin él, vacío
+  solucion: string; // se muestra al comprobar; el alumno se autoevalúa
+};
+
+export type ActividadTerminalSimulada = {
+  tipo: "terminalSimulada";
+  consigna: string;
+  carpeta?: string; // va antes del $
+  salidaPrevia?: string; // lo que la terminal ya muestra
+  comandos: string[]; // las formas aceptadas; la primera se muestra como respuesta correcta
+  salidaAcierto?: string; // se muestra si acierta
+  pista?: string; // se muestra si falla
+};
+
+export type CommitGrafo = {
+  nombre: string;
+  padres: number[]; // índices de commits anteriores: ninguno el primero, dos un merge
+};
+
+export type RamaGrafo = {
+  nombre: string;
+  commit: number; // índice en `commits`
+};
+
+// HEAD apunta a una rama o, suelto, a un commit.
+export type HeadGrafo = { rama: number } | { commit: number };
+
+export type ActividadGrafoCommits = {
+  tipo: "grafoCommits";
+  consigna: string;
+  commits: CommitGrafo[]; // del más antiguo al más nuevo; los clientes los acomodan
+  ramas: RamaGrafo[]; // en el orden del autor: una fila por rama, de arriba abajo
+  head?: HeadGrafo;
+  respuesta: number; // índice en `commits`
+  explicacion?: string; // se muestra al comprobar, acierte o no
+};
+
 export type Actividad =
   | ActividadTeoria
   | ActividadTarjeta
   | ActividadOpcionMultiple
   | ActividadCompletarEspacios
-  | ActividadPreguntaAbierta;
+  | ActividadPreguntaAbierta
+  | ActividadEmparejar
+  | ActividadClasificar
+  | ActividadOrdenar
+  | ActividadBancoPalabras
+  | ActividadRetoCodigo
+  | ActividadTerminalSimulada
+  | ActividadGrafoCommits;
 
 export type TipoActividad = Actividad["tipo"];
 
@@ -199,6 +397,13 @@ export type RespuestaLeccion = {
 
 // Marca de un espacio dentro de ActividadCompletarEspacios.texto
 export const MARCA_ESPACIO = "___";
+
+// Lo que ve el alumno en una actividad sin consigna (F11). Ordenar siempre trae la suya.
+export const CONSIGNA_POR_DEFECTO = {
+  emparejar: "Empareja los conceptos",
+  clasificar: "Clasifica cada elemento",
+  bancoPalabras: "Completa con las fichas del banco",
+} as const;
 
 // Longitudes en caracteres Unicode: Array.from(texto).length
 export const LIMITES_ACTIVIDADES = {
@@ -221,6 +426,39 @@ export const LIMITES_ACTIVIDADES = {
   espaciosMax: 20,
   aceptadasMax: 10,
   solucionMax: 2000,
+  // actividades de relacionar (F11)
+  consignaMax: 500,
+  parejasMin: 3, // con 2, la regla de que nunca salen resueltas delataría la respuesta
+  parejasMax: 8,
+  parejaTextoMax: 200,
+  categoriasMin: 2,
+  categoriasMax: 4,
+  categoriaMax: 100,
+  elementosClasificarMin: 2,
+  elementosClasificarMax: 12,
+  elementoClasificarMax: 100,
+  elementosOrdenarMin: 3, // igual que parejasMin
+  elementosOrdenarMax: 10,
+  elementoOrdenarMax: 200,
+  espaciosBancoMax: 10,
+  fichasMin: 2,
+  fichasMax: 20,
+  fichaMax: 100,
+  // actividades de código y terminal (F12); la consigna usa consignaMax, el código
+  // inicial codigoMax y la solución solucionMax
+  respuestaCodigoMax: 2000, // lo que escribe el alumno
+  carpetaMax: 100,
+  salidaMax: 2000,
+  comandosMax: 10,
+  comandoMax: 200, // también lo que escribe el alumno
+  pistaMax: 500,
+  commitsMin: 2,
+  commitsMax: 10,
+  nombreCommitMax: 4, // cabe dentro del círculo
+  columnasGrafoMax: 6, // con áreas de 44 px, cabe en un teléfono de 360 px
+  ramasMax: 4,
+  nombreRamaMax: 20,
+  explicacionMax: 500,
 } as const;
 
 export const MENSAJES_LECCION = {
@@ -241,6 +479,13 @@ export const CALIFICA_ACTIVIDAD: Record<TipoActividad, boolean> = {
   opcionMultiple: true,
   completarEspacios: true,
   preguntaAbierta: true,
+  emparejar: true,
+  clasificar: true,
+  ordenar: true,
+  bancoPalabras: true,
+  retoCodigo: true,
+  terminalSimulada: true,
+  grafoCommits: true,
 };
 
 // La última vez que el alumno completó una lección.
@@ -294,6 +539,7 @@ export type CursoDelAutor = {
   estado: EstadoCurso;
   revisionRechazada: boolean; // la última revisión se rechazó; se va al enviarlo otra vez
   cantidadLecciones: number;
+  idPortada: string | null; // F13
 };
 
 export type RespuestaCursosDelAutor = {
@@ -304,6 +550,8 @@ export type RespuestaCursosDelAutor = {
 export type CuerpoDatosCurso = {
   titulo: string;
   descripcion: string;
+  // F13, solo en el PUT: sin él la portada no cambia; null la quita
+  idPortada?: string | null;
 };
 
 // Una lección en el mapa del curso.
@@ -318,6 +566,8 @@ export type CursoEnEditor = {
   estado: EstadoCurso;
   revisionRechazada: boolean;
   motivoRechazo: string | null; // puede haber rechazo sin motivo
+  portada: Imagen | null; // F13
+  pesoImagenes: number; // F13: bytes de todas sus imágenes, hasta LIMITES_IMAGENES.pesoCursoMax
   lecciones: LeccionEnMapa[]; // por posición
 };
 
@@ -379,6 +629,28 @@ export const MENSAJES_EDITOR = {
   sinEspacios: "Agrega al menos un espacio con ___.",
   demasiadosEspacios: "El texto puede tener hasta 20 espacios.",
   gruposDeMas: "Hay más grupos de respuestas que espacios en el texto. Quita los que sobran.",
+  // actividades de relacionar (F11)
+  textoRepetido: "Este texto está repetido.",
+  categoriaRepetida: "Esta categoría está repetida.",
+  elementoRepetido: "Este elemento está repetido.",
+  categoriaFalta: "Elige una categoría.",
+  categoriaSinElementos: "Esta categoría no tiene elementos.",
+  fichaFalta: "Marca al menos una ficha.",
+  demasiadosEspaciosBanco: "El texto puede tener hasta 10 espacios.",
+  fichasInsuficientes:
+    "No alcanzan las fichas para llenar todos los espacios. Si una palabra va en dos, agrégala dos veces.",
+  // actividades de código y terminal (F12)
+  lenguajeFalta: "Elige un lenguaje.",
+  comandoRepetido: "Este comando está repetido.",
+  nombreCommitRepetido: "Este nombre ya lo tiene otro commit.",
+  padreFalta: "Elige un padre.",
+  segundoPadreIgual: "El segundo padre tiene que ser otro commit.",
+  demasiadasColumnas:
+    "El grafo puede tener hasta 6 commits seguidos de izquierda a derecha. Pon alguno en paralelo o quita alguno.",
+  ramaRepetida: "Esta rama está repetida.",
+  ramaHead: "Una rama no se puede llamar HEAD.",
+  commitFalta: "Elige un commit.",
+  respuestaFalta: "Elige la respuesta.",
   maxLecciones: "Un curso puede tener hasta 100 lecciones.",
   maxActividades: "Una lección puede tener hasta 50 actividades.",
   // al abrir una lección (403); al abrir, un 404 usa los mensajes de F02 y F03

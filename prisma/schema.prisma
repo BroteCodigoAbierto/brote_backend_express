@@ -111,6 +111,11 @@ model Curso {
   creadoEn      DateTime  @default(now()) @map("creado_en")
   actualizadoEn DateTime  @updatedAt @map("actualizado_en")
   lecciones     Leccion[]
+  // F13: una de sus imágenes, que no sea GIF (lo comprueba el servicio). Si la imagen se
+  // borra, el curso se queda con la portada generada
+  idPortada     String?   @map("id_portada")
+  portada       Imagen?   @relation("PortadaCurso", fields: [idPortada], references: [id], onDelete: SetNull)
+  imagenes      Imagen[]  @relation("ImagenesCurso")
 
   @@index([idAutor])
   @@map("curso")
@@ -126,6 +131,9 @@ model Leccion {
   actividades   Json       @default("[]")
   // sube cada vez que se guarda la lección; reordenar no la cambia (spec F05)
   version       Int        @default(1)
+  // F13: los ids de las imágenes que usan sus actividades, sin repetir. Lo escribe
+  // guardarLeccion; así "se usa en el curso" no tiene que leer el JSON
+  imagenes      String[]   @default([])
   creadoEn      DateTime   @default(now()) @map("creado_en")
   actualizadoEn DateTime   @updatedAt @map("actualizado_en")
   progresos     Progreso[] // F04 (no crea columnas)
@@ -154,4 +162,29 @@ model Progreso {
   @@id([idUsuario, idLeccion])
   @@index([idLeccion])
   @@map("progreso")
+}
+
+// ---------------------------------------------------------------------------
+// Imagen (F13): un archivo de imagen de un curso, con sus bytes (decisión 0016). Nunca
+// cambia: otro archivo es otra imagen. La migración agrega los CHECK de formato, lados y
+// peso, que Prisma no sabe declarar. Las consultas de metadatos nunca piden `datos`.
+// ---------------------------------------------------------------------------
+
+model Imagen {
+  id               String   @id @default(uuid(7))
+  idCurso          String   @map("id_curso")
+  curso            Curso    @relation("ImagenesCurso", fields: [idCurso], references: [id], onDelete: Cascade)
+  // SHA-256 de `datos`: el mismo archivo subido dos veces al mismo curso es la misma imagen
+  huella           String
+  formato          String // jpeg, png, webp o gif (FORMATOS_IMAGEN)
+  ancho            Int
+  alto             Int
+  peso             Int // bytes, igual a la longitud de `datos`
+  datos            Bytes
+  // se renueva si se sube otra vez el mismo archivo; decide cuándo se borra si nada la usa
+  subidaEn         DateTime @default(now()) @map("subida_en")
+  cursosConPortada Curso[]  @relation("PortadaCurso")
+
+  @@unique([idCurso, huella])
+  @@map("imagen")
 }
