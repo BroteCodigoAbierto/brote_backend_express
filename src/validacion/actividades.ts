@@ -63,6 +63,32 @@ function soloCampos(objeto: Objeto, permitidos: string[]) {
   if (sobrante) throw new ErrorActividad(`campo desconocido: ${sobrante}`);
 }
 
+// Devuelve la lista para no tener que volver a comprobar que lo es.
+function listaEntre(valor: unknown, campo: string, minimo: number, maximo: number): unknown[] {
+  if (!Array.isArray(valor) || valor.length < minimo || valor.length > maximo) {
+    throw new ErrorActividad(`${campo}: entre ${minimo} y ${maximo}`);
+  }
+  return valor;
+}
+
+function textoDeLista(valor: unknown, campo: string, maximo: number): string {
+  if (!esTextoNoVacio(valor)) throw new ErrorActividad(`${campo}: textos no vacíos`);
+  comprobarLargo(valor, campo, maximo);
+  return valor;
+}
+
+// Se comparan recortados, respetando las mayúsculas, como las opciones de F05.
+function textosSinRepetir(textos: string[], campo: string) {
+  const recortados = textos.map((texto) => texto.trim());
+  if (new Set(recortados).size !== recortados.length) {
+    throw new ErrorActividad(`${campo}: textos repetidos`);
+  }
+}
+
+function contarMarcas(texto: string): number {
+  return texto.split(MARCA_ESPACIO).length - 1;
+}
+
 function validarTeoria(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "titulo", "texto", "codigo", "puntosClave"]);
   textoOpcional(actividad, "titulo", LIMITES_ACTIVIDADES.tituloMax);
@@ -155,7 +181,7 @@ function validarEspacio(espacio: unknown, indice: number) {
 function validarCompletarEspacios(actividad: Objeto) {
   soloCampos(actividad, ["tipo", "texto", "espacios"]);
   textoObligatorio(actividad, "texto", LIMITES_ACTIVIDADES.textoEspaciosMax);
-  const marcas = (actividad.texto as string).split(MARCA_ESPACIO).length - 1;
+  const marcas = contarMarcas(actividad.texto as string);
   if (marcas === 0) throw new ErrorActividad(`texto sin ningún ${MARCA_ESPACIO}`);
   if (marcas > LIMITES_ACTIVIDADES.espaciosMax) {
     throw new ErrorActividad(`texto: hasta ${LIMITES_ACTIVIDADES.espaciosMax} espacios`);
@@ -173,6 +199,152 @@ function validarPreguntaAbierta(actividad: Objeto) {
   textoObligatorio(actividad, "solucion", LIMITES_ACTIVIDADES.solucionMax);
 }
 
+function validarPareja(pareja: unknown, indice: number) {
+  if (!esObjeto(pareja)) throw new ErrorActividad(`pareja ${indice + 1}: { izquierda, derecha }`);
+  soloCampos(pareja, ["izquierda", "derecha"]);
+  textoObligatorio(pareja, "izquierda", LIMITES_ACTIVIDADES.parejaTextoMax);
+  textoObligatorio(pareja, "derecha", LIMITES_ACTIVIDADES.parejaTextoMax);
+}
+
+function validarEmparejar(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "parejas"]);
+  textoOpcional(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const { parejasMin, parejasMax } = LIMITES_ACTIVIDADES;
+  const parejas = listaEntre(actividad.parejas, "parejas", parejasMin, parejasMax);
+  parejas.forEach(validarPareja);
+  const validas = parejas as Objeto[];
+  textosSinRepetir(
+    validas.map(({ izquierda }) => izquierda as string),
+    "izquierda",
+  );
+  textosSinRepetir(
+    validas.map(({ derecha }) => derecha as string),
+    "derecha",
+  );
+}
+
+function validarElementoClasificar(elemento: unknown, indice: number, categorias: number) {
+  if (!esObjeto(elemento)) throw new ErrorActividad(`elemento ${indice + 1}: { texto, categoria }`);
+  soloCampos(elemento, ["texto", "categoria"]);
+  textoObligatorio(elemento, "texto", LIMITES_ACTIVIDADES.elementoClasificarMax);
+  const { categoria } = elemento;
+  if (
+    !Number.isInteger(categoria) ||
+    (categoria as number) < 0 ||
+    (categoria as number) >= categorias
+  ) {
+    throw new ErrorActividad(`elemento ${indice + 1}: categoria fuera de rango`);
+  }
+}
+
+function validarClasificar(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "categorias", "elementos"]);
+  textoOpcional(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const { categoriasMin, categoriasMax, elementosClasificarMin, elementosClasificarMax } =
+    LIMITES_ACTIVIDADES;
+  const categorias = listaEntre(actividad.categorias, "categorias", categoriasMin, categoriasMax);
+  const nombres = categorias.map((categoria) =>
+    textoDeLista(categoria, "categorias", LIMITES_ACTIVIDADES.categoriaMax),
+  );
+  textosSinRepetir(nombres, "categorias");
+  const elementos = listaEntre(
+    actividad.elementos,
+    "elementos",
+    elementosClasificarMin,
+    elementosClasificarMax,
+  );
+  elementos.forEach((elemento, indice) =>
+    validarElementoClasificar(elemento, indice, nombres.length),
+  );
+  const validos = elementos as Objeto[];
+  textosSinRepetir(
+    validos.map(({ texto }) => texto as string),
+    "elementos",
+  );
+  const usadas = new Set(validos.map(({ categoria }) => categoria));
+  if (usadas.size !== nombres.length) {
+    throw new ErrorActividad("categorias: cada una necesita al menos un elemento");
+  }
+}
+
+function validarOrdenar(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "elementos"]);
+  textoObligatorio(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  const { elementosOrdenarMin, elementosOrdenarMax, elementoOrdenarMax } = LIMITES_ACTIVIDADES;
+  const elementos = listaEntre(
+    actividad.elementos,
+    "elementos",
+    elementosOrdenarMin,
+    elementosOrdenarMax,
+  );
+  textosSinRepetir(
+    elementos.map((elemento) => textoDeLista(elemento, "elementos", elementoOrdenarMax)),
+    "elementos",
+  );
+}
+
+// ¿Se puede dar a cada espacio una ficha que valga en él, sin usar una ficha dos veces?
+// No basta con mirar espacio por espacio: con {a, b} y {a} y las fichas a y b hay solución,
+// pero no si el primero toma a. Emparejamiento por caminos de aumento (brote_specs, research
+// de F11, punto 5). Recibe los textos ya recortados.
+function hayFormaDeLlenar(aceptadas: string[][], fichas: string[]): boolean {
+  const duenoDe = new Map<number, number>();
+
+  function asignar(espacio: number, vistas: Set<number>): boolean {
+    for (const [ficha, texto] of fichas.entries()) {
+      if (!aceptadas[espacio]?.includes(texto) || vistas.has(ficha)) continue;
+      vistas.add(ficha);
+      const dueno = duenoDe.get(ficha);
+      if (dueno === undefined || asignar(dueno, vistas)) {
+        duenoDe.set(ficha, espacio);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return aceptadas.every((_, espacio) => asignar(espacio, new Set()));
+}
+
+function validarEspacioBanco(espacio: unknown, indice: number, fichas: string[]): string[] {
+  if (!esObjeto(espacio)) throw new ErrorActividad(`espacio ${indice + 1}: { aceptadas }`);
+  soloCampos(espacio, ["aceptadas"]);
+  const campo = `espacio ${indice + 1}`;
+  const aceptadas = listaEntre(espacio.aceptadas, campo, 1, LIMITES_ACTIVIDADES.fichasMax);
+  const recortadas = aceptadas.map((aceptada) =>
+    textoDeLista(aceptada, campo, LIMITES_ACTIVIDADES.fichaMax).trim(),
+  );
+  if (!recortadas.every((aceptada) => fichas.includes(aceptada))) {
+    throw new ErrorActividad(`${campo}: cada aceptada tiene que ser una ficha`);
+  }
+  return recortadas;
+}
+
+// Las fichas sí se pueden repetir: es la forma de usar una palabra en dos espacios. Se compara
+// recortado, porque el recorte se hace después (validacion/editor.ts).
+function validarBancoPalabras(actividad: Objeto) {
+  soloCampos(actividad, ["tipo", "consigna", "texto", "fichas", "espacios"]);
+  textoOpcional(actividad, "consigna", LIMITES_ACTIVIDADES.consignaMax);
+  textoObligatorio(actividad, "texto", LIMITES_ACTIVIDADES.textoEspaciosMax);
+  const marcas = contarMarcas(actividad.texto as string);
+  if (marcas === 0) throw new ErrorActividad(`texto sin ningún ${MARCA_ESPACIO}`);
+  if (marcas > LIMITES_ACTIVIDADES.espaciosBancoMax) {
+    throw new ErrorActividad(`texto: hasta ${LIMITES_ACTIVIDADES.espaciosBancoMax} espacios`);
+  }
+  const { fichasMin, fichasMax, fichaMax } = LIMITES_ACTIVIDADES;
+  const fichas = listaEntre(actividad.fichas, "fichas", fichasMin, fichasMax).map((ficha) =>
+    textoDeLista(ficha, "fichas", fichaMax).trim(),
+  );
+  const { espacios } = actividad;
+  if (!Array.isArray(espacios) || espacios.length !== marcas) {
+    throw new ErrorActividad(`espacios: debe haber ${marcas}, uno por cada ${MARCA_ESPACIO}`);
+  }
+  const aceptadas = espacios.map((espacio, indice) => validarEspacioBanco(espacio, indice, fichas));
+  if (!hayFormaDeLlenar(aceptadas, fichas)) {
+    throw new ErrorActividad("fichas: no alcanzan para llenar todos los espacios");
+  }
+}
+
 // Una entrada por cada tipo del contrato: si el contrato agrega uno, no compila.
 const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   teoria: validarTeoria,
@@ -180,6 +352,10 @@ const validadores: Record<TipoActividad, (actividad: Objeto) => void> = {
   opcionMultiple: validarOpcionMultiple,
   completarEspacios: validarCompletarEspacios,
   preguntaAbierta: validarPreguntaAbierta,
+  emparejar: validarEmparejar,
+  clasificar: validarClasificar,
+  ordenar: validarOrdenar,
+  bancoPalabras: validarBancoPalabras,
 };
 
 function esTipoConocido(tipo: unknown): tipo is TipoActividad {

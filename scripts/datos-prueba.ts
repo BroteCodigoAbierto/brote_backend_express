@@ -1,5 +1,5 @@
-// Cuentas y cursos de prueba de F02 y F03 (brote_specs, quickstart de F02,
-// sección 1.1, y de F03, sección 1.1). Los cuatro cursos publicados copian tal
+// Cuentas y cursos de prueba de F02, F03 y F11 (brote_specs, quickstart de cada
+// una, sección 1.1). Los cuatro cursos publicados copian tal
 // cual el título, la descripción y los títulos de las lecciones de
 // brote_specs/referencia/cursos-prototipo/, y sus actividades salen de
 // actividades-prototipo.ts. Los demás solo se publican mientras se valida el
@@ -152,10 +152,98 @@ const actividadesConEtiquetas: Actividad[] = [
   { tipo: "preguntaAbierta", pregunta: `Pregunta ${HTML}`, solucion: `Solución ${HTML}` },
 ];
 
+// F11: los cuatro tipos de relacionar, con etiquetas en todos sus textos.
+const relacionarConEtiquetas: Actividad[] = [
+  {
+    tipo: "emparejar",
+    consigna: `Consigna ${HTML}`,
+    parejas: [
+      { izquierda: `Uno ${HTML}`, derecha: `Primero ${HTML}` },
+      { izquierda: `Dos ${HTML}`, derecha: `Segundo ${HTML}` },
+      { izquierda: `Tres ${HTML}`, derecha: `Tercero ${HTML}` },
+    ],
+  },
+  {
+    tipo: "clasificar",
+    consigna: `Consigna ${HTML}`,
+    categorias: [`Par ${HTML}`, `Impar ${HTML}`],
+    elementos: [
+      { texto: `Dos ${HTML}`, categoria: 0 },
+      { texto: `Tres ${HTML}`, categoria: 1 },
+    ],
+  },
+  {
+    tipo: "ordenar",
+    consigna: `Consigna ${HTML}`,
+    elementos: [`Primero ${HTML}`, `Segundo ${HTML}`, `Tercero ${HTML}`],
+  },
+  {
+    tipo: "bancoPalabras",
+    consigna: `Consigna ${HTML}`,
+    texto: `Texto ${HTML} con un espacio: ___`,
+    fichas: ["<b>hola</b>", "<script>alert(1)</script>"],
+    espacios: [{ aceptadas: ["<b>hola</b>"] }],
+  },
+];
+
+// F11: una palabra que vale en dos espacios, y espacios que se pueden intercambiar.
+const fichasQueSeRepiten: Actividad[] = [
+  {
+    tipo: "bancoPalabras",
+    texto: "Mis colores favoritos son ___ y ___.",
+    fichas: ["rojo", "azul", "verde"],
+    espacios: [{ aceptadas: ["rojo", "azul"] }, { aceptadas: ["rojo", "azul"] }],
+  },
+  {
+    tipo: "bancoPalabras",
+    texto: "___ doble(___ x)",
+    fichas: ["int", "int", "char"],
+    espacios: [{ aceptadas: ["int"] }, { aceptadas: ["int"] }],
+  },
+];
+
+// F11: los máximos de cada tipo, para ver cómo se acomodan los textos largos.
+function textoLargo(inicio: string, largo: number): string {
+  return `${inicio} `.padEnd(largo, "texto largo ").slice(0, largo).trimEnd();
+}
+
+function listaDe<T>(total: number, crear: (numero: number) => T): T[] {
+  return Array.from({ length: total }, (_, i) => crear(i + 1));
+}
+
+const relacionarAlLimite: Actividad[] = [
+  {
+    tipo: "emparejar",
+    parejas: listaDe(8, (n) => ({
+      izquierda: textoLargo(`Izquierda ${n}`, 200),
+      derecha: textoLargo(`Derecha ${n}`, 200),
+    })),
+  },
+  {
+    tipo: "clasificar",
+    categorias: listaDe(4, (n) => textoLargo(`Categoría ${n}`, 100)),
+    elementos: listaDe(12, (n) => ({
+      texto: textoLargo(`Elemento ${n}`, 100),
+      categoria: n % 4,
+    })),
+  },
+  {
+    tipo: "ordenar",
+    consigna: "Ordena los elementos del 1 al 10.",
+    elementos: listaDe(10, (n) => textoLargo(`Elemento ${n}`, 200)),
+  },
+  {
+    tipo: "bancoPalabras",
+    texto: listaDe(10, (n) => `Espacio ${n}: ___`).join("\n"),
+    fichas: listaDe(20, (n) => textoLargo(`Ficha ${n}`, 100)),
+    espacios: listaDe(10, (n) => ({ aceptadas: [textoLargo(`Ficha ${n}`, 100)] })),
+  },
+];
+
 const actividadesDePrueba: CursoPrueba = {
   correoAutor: AUTOR,
   titulo: "Actividades de prueba",
-  descripcion: "Curso para comprobar a mano los cinco tipos de actividad.",
+  descripcion: "Curso para comprobar a mano los tipos de actividad.",
   publicado: false,
   lecciones: [
     {
@@ -173,6 +261,9 @@ const actividadesDePrueba: CursoPrueba = {
       actividades: actividadesConEtiquetas,
     },
     { titulo: "Lección sin actividades", actividades: [] },
+    { titulo: "Relacionar con etiquetas", actividades: relacionarConEtiquetas },
+    { titulo: "Fichas que se repiten", actividades: fichasQueSeRepiten },
+    { titulo: "Relacionar al límite", actividades: relacionarAlLimite },
   ],
 };
 
