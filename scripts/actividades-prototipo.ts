@@ -1,8 +1,8 @@
 // Actividades de los cuatro cursos del prototipo, ya convertidas al contrato
-// (brote_specs, research de F03, punto 6). Salen de
-// brote_specs/referencia/cursos-prototipo/ con solo los cinco tipos de F03, en su
+// (brote_specs, research de F03, punto 6, de F11, punto 11, y de F12, punto 10). Salen de
+// brote_specs/referencia/cursos-prototipo/ con los doce tipos de F03, F11 y F12, en su
 // orden, sin glosario y con los textos sin cambios. Si cambia referencia/, se
-// regeneran como dice la tarea T012 de F03. Las usa datos-prueba.ts.
+// regeneran como dice la tarea T016 de F12. Las usa datos-prueba.ts.
 
 import type { Actividad } from "../src/tipos/contrato.ts";
 
@@ -80,6 +80,65 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         texto:
           "Todo empieza con un comando: git init. Convierte la carpeta actual en un repositorio Git, creando una carpeta oculta .git donde vivirá todo el historial.\n\nDesde ahí, el flujo típico es: editas archivos, los agregas al staging area con git add, y los confirmas con git commit.",
       },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Estás en una carpeta con un proyecto nuevo. Conviértela en un repositorio Git.",
+        carpeta: "~/proyectos/mi-app",
+        salidaPrevia: "README.md\nindex.html",
+        comandos: ["git init"],
+        salidaAcierto: "Initialized empty Git repository in ~/proyectos/mi-app/.git/",
+        pista: 'El comando que inicializa un repositorio es "git init".',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Quieres ver qué archivos están sin trackear o modificados.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git status"],
+        salidaAcierto:
+          'En la rama main\n\nNo hay commits todavía\n\nArchivos sin seguimiento:\n  (usa "git add <archivo>..." para incluirlo en lo que será confirmado)\n\tREADME.md\n\tindex.html',
+        pista: 'El comando para ver el estado del repositorio es "git status".',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Prepara todos los archivos para el próximo commit.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git add .", "git add -A"],
+        salidaAcierto: '(sin salida: así confirma "git add" que todo salió bien)',
+        pista:
+          'El comando que mueve archivos al staging area es "git add", seguido de los archivos o de "." para todos.',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: 'Confirma los cambios preparados con el mensaje "Primer commit".',
+        carpeta: "~/proyectos/mi-app",
+        comandos: ['git commit -m "Primer commit"', "git commit -m 'Primer commit'"],
+        salidaAcierto:
+          "[main (root-commit) a1b2c3d] Primer commit\n 2 files changed, 10 insertions(+)",
+        pista: 'El comando es: git commit -m "mensaje"',
+      },
+      {
+        tipo: "clasificar",
+        consigna: "Clasifica cada comando según lo que afecta.",
+        categorias: ["Solo prepara (staging)", "Guarda en el historial"],
+        elementos: [
+          {
+            texto: "git add archivo.txt",
+            categoria: 0,
+          },
+          {
+            texto: 'git commit -m "mensaje"',
+            categoria: 1,
+          },
+          {
+            texto: "git add .",
+            categoria: 0,
+          },
+          {
+            texto: 'git commit -m "otro"',
+            categoria: 1,
+          },
+        ],
+      },
     ],
     [
       {
@@ -107,6 +166,24 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           },
         ],
         correcta: 0,
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Quieres ver el historial de commits en una sola línea por commit.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git log --oneline"],
+        salidaAcierto: "a1b2c3d Primer commit",
+        pista: 'Combina "git log" con la opción "--oneline".',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna:
+          "Te equivocaste editando index.html y quieres descartar los cambios sin confirmar, volviendo a la última versión guardada.",
+        carpeta: "~/proyectos/mi-app",
+        comandos: ["git restore index.html", "git checkout -- index.html"],
+        salidaAcierto: "(sin salida: index.html vuelve a como estaba en el último commit)",
+        pista:
+          'El comando moderno es "git restore <archivo>"; el clásico es "git checkout -- <archivo>".',
       },
       {
         tipo: "teoria",
@@ -144,10 +221,63 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "Una rama (branch) es una línea de desarrollo independiente. La rama principal (main) normalmente contiene el código estable; cuando quieres construir algo nuevo sin arriesgar esa estabilidad, creas una rama aparte.\n\nCuando terminas, integras (merge) esa rama de vuelta a main.",
       },
       {
+        tipo: "terminalSimulada",
+        consigna: 'Crea una nueva rama llamada "feature-login" y muévete a ella en un solo paso.',
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git checkout -b feature-login", "git switch -c feature-login"],
+        salidaAcierto: "Switched to a new branch 'feature-login'",
+        pista:
+          '"git checkout -b <nombre>" o el más moderno "git switch -c <nombre>" crean y cambian de rama a la vez.',
+      },
+      {
+        tipo: "grafoCommits",
+        consigna:
+          "Hiciste dos commits en main (c1, c2). Luego creaste la rama feature en c2 e hiciste ahí un commit más (c3). ¿A qué commit apunta main ahora mismo?",
+        commits: [
+          {
+            nombre: "c1",
+            padres: [],
+          },
+          {
+            nombre: "c2",
+            padres: [0],
+          },
+          {
+            nombre: "c3",
+            padres: [1],
+          },
+        ],
+        ramas: [
+          {
+            nombre: "feature",
+            commit: 2,
+          },
+        ],
+        respuesta: 1,
+        explicacion:
+          "Crear y moverte a una rama nueva no mueve main: se queda apuntando a c2, el commit desde el que creaste feature. El nuevo commit c3 solo existe en feature.",
+      },
+      {
         tipo: "teoria",
         titulo: "Uniendo el trabajo: merge",
         texto:
           "Cuando tu rama está lista, vuelves a main y ejecutas git merge feature-login. Si main no avanzó mientras tanto, Git hace un fast-forward: simplemente mueve el puntero de main hasta el último commit de la rama.\n\nSi ambas ramas avanzaron por separado, Git crea un commit de merge que une ambas historias.",
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Terminaste el trabajo en feature-login. Vuelve a main.",
+        carpeta: "~/proyectos/mi-app (feature-login)",
+        comandos: ["git checkout main", "git switch main"],
+        salidaAcierto: "Switched to branch 'main'",
+        pista: '"git checkout <rama>" o "git switch <rama>" cambian de rama.',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Ahora, desde main, integra los cambios de feature-login.",
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git merge feature-login"],
+        salidaAcierto: "Updating a1b2c3d..d4e5f6g\nFast-forward\n index.html | 1 +",
+        pista: 'El comando es "git merge <rama>".',
       },
     ],
     [
@@ -156,6 +286,56 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         titulo: "Tu repo no está solo",
         texto:
           "Hasta ahora todo vivía en tu computadora. Un remoto es una copia del repositorio alojada en otro lugar (como GitHub o GitLab) con la que puedes sincronizarte. Por convención, el remoto principal se llama origin.\n\nLos comandos básicos: clone trae una copia completa de un remoto; push sube tus commits; pull trae y combina los commits nuevos del remoto; fetch solo los descarga sin combinarlos todavía.",
+      },
+      {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "git clone <url>",
+            derecha: "Descarga una copia completa de un repositorio remoto",
+          },
+          {
+            izquierda: "git push",
+            derecha: "Sube tus commits locales al remoto",
+          },
+          {
+            izquierda: "git pull",
+            derecha: "Descarga y combina los commits nuevos del remoto",
+          },
+          {
+            izquierda: "git fetch",
+            derecha: "Descarga los commits nuevos sin combinarlos todavía",
+          },
+        ],
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna:
+          "Tienes la URL de un repositorio en GitHub y quieres traer una copia completa a tu computadora.",
+        carpeta: "~/proyectos",
+        comandos: ["git clone https://github.com/usuario/mi-app.git"],
+        salidaAcierto:
+          "Cloning into 'mi-app'...\nremote: Enumerating objects: 12, done.\nReceiving objects: 100% (12/12), done.",
+        pista: 'El comando es "git clone" seguido de la URL del repositorio.',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna: "Ya hiciste commits locales en main. Súbelos al remoto origin.",
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git push origin main", "git push"],
+        salidaAcierto:
+          "Enumerating objects: 5, done.\nTo https://github.com/usuario/mi-app.git\n   a1b2c3d..d4e5f6g  main -> main",
+        pista:
+          'El comando es "git push origin main" (o solo "git push" si ya está configurado el upstream).',
+      },
+      {
+        tipo: "terminalSimulada",
+        consigna:
+          "Un compañero subió cambios nuevos a origin/main. Tráelos y combínalos con tu rama local.",
+        carpeta: "~/proyectos/mi-app (main)",
+        comandos: ["git pull", "git pull origin main"],
+        salidaAcierto: "Updating d4e5f6g..h7i8j9k\nFast-forward\n styles.css | 3 ++-",
+        pista: 'El comando es "git pull".',
       },
       {
         tipo: "opcionMultiple",
@@ -203,6 +383,33 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "clasificar",
+        consigna: "Clasifica cada paso del proceso de resolver un conflicto.",
+        categorias: ["Antes de resolver", "Después de resolver"],
+        elementos: [
+          {
+            texto: "Ver los marcadores <<<<<<< ======= >>>>>>>",
+            categoria: 0,
+          },
+          {
+            texto: 'git status muestra el archivo como "both modified"',
+            categoria: 0,
+          },
+          {
+            texto: "Borrar los marcadores y dejar el código final",
+            categoria: 1,
+          },
+          {
+            texto: "git add del archivo ya resuelto",
+            categoria: 1,
+          },
+          {
+            texto: "git commit para cerrar el merge",
+            categoria: 1,
+          },
+        ],
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "¿Por qué crees que Git prefiere pedirte que decidas manualmente en vez de elegir una versión automáticamente?",
@@ -230,6 +437,27 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "あ",
+            derecha: "a",
+          },
+          {
+            izquierda: "い",
+            derecha: "i",
+          },
+          {
+            izquierda: "う",
+            derecha: "u",
+          },
+          {
+            izquierda: "え",
+            derecha: "e",
+          },
+        ],
+      },
+      {
         tipo: "tarjeta",
         frente: "お",
         reverso: "Se lee 'o', como en 'oso'. Es la última de las cinco vocales del hiragana.",
@@ -253,6 +481,16 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "bancoPalabras",
+        texto: "こんにちは、___ ですか？",
+        fichas: ["元気", "忙しい", "学生"],
+        espacios: [
+          {
+            aceptadas: ["元気"],
+          },
+        ],
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "¿Cómo responderías 'estoy bien, gracias' en japonés? No te preocupes por ser 100% exacto.",
@@ -260,6 +498,27 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
       },
     ],
     [
+      {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "一",
+            derecha: "1",
+          },
+          {
+            izquierda: "二",
+            derecha: "2",
+          },
+          {
+            izquierda: "三",
+            derecha: "3",
+          },
+          {
+            izquierda: "四",
+            derecha: "4",
+          },
+        ],
+      },
       {
         tipo: "opcionMultiple",
         pregunta: "¿Cuál es el kanji para '5'?",
@@ -281,8 +540,28 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         frente: "三",
         reverso: "Se lee 'san', significa 3.",
       },
+      {
+        tipo: "ordenar",
+        consigna: "Ordena estos números de menor a mayor.",
+        elementos: ["一", "二", "三", "四", "五"],
+      },
     ],
     [
+      {
+        tipo: "bancoPalabras",
+        texto: "私は ___ です。",
+        fichas: ["学生", "先生", "医者"],
+        espacios: [
+          {
+            aceptadas: ["学生"],
+          },
+        ],
+      },
+      {
+        tipo: "ordenar",
+        consigna: "Ordena las palabras para formar 'watashi wa gakusei desu' (soy estudiante).",
+        elementos: ["私は", "学生", "です"],
+      },
       {
         tipo: "tarjeta",
         frente: "です",
@@ -324,6 +603,36 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "clasificar",
+        categorias: ["Tipo de dato", "Palabra clave"],
+        elementos: [
+          {
+            texto: "int",
+            categoria: 0,
+          },
+          {
+            texto: "if",
+            categoria: 1,
+          },
+          {
+            texto: "char",
+            categoria: 0,
+          },
+          {
+            texto: "while",
+            categoria: 1,
+          },
+          {
+            texto: "float",
+            categoria: 0,
+          },
+          {
+            texto: "return",
+            categoria: 1,
+          },
+        ],
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta: "¿Por qué en C hay que declarar el tipo de una variable antes de usarla?",
         solucion:
@@ -348,6 +657,12 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "ordenar",
+        consigna:
+          "Ordena las líneas para formar un programa que imprima 'Hola' si x es mayor que 5.",
+        elementos: ["if (x > 5) {", '    printf("Hola");', "}"],
+      },
+      {
         tipo: "completarEspacios",
         texto: 'if (x ___ 5) { printf("Mayor"); }',
         espacios: [
@@ -355,6 +670,14 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             aceptadas: [">"],
           },
         ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe una función 'esPar' en C que reciba un entero y devuelva 1 si es par, 0 si no.",
+        lenguaje: "c",
+        codigoInicial: "int esPar(int n) {\n  \n}",
+        solucion: "int esPar(int n) {\n  return n % 2 == 0;\n}",
       },
     ],
     [
@@ -375,11 +698,28 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "bancoPalabras",
+        texto: "___ suma(int a, int b) {",
+        fichas: ["int", "void", "char"],
+        espacios: [
+          {
+            aceptadas: ["int"],
+          },
+        ],
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "¿Qué diferencia hay entre pasar un argumento por valor y por referencia (puntero) en C?",
         solucion:
           "Por valor, la función recibe una copia del dato y no puede modificar la variable original. Por referencia (pasando un puntero), la función recibe la dirección de memoria y sí puede modificar el valor original a través de ese puntero.",
+      },
+      {
+        tipo: "retoCodigo",
+        consigna: "Escribe una función 'maximo' que reciba dos enteros y devuelva el mayor.",
+        lenguaje: "c",
+        codigoInicial: "int maximo(int a, int b) {\n  \n}",
+        solucion: "int maximo(int a, int b) {\n  return a > b ? a : b;\n}",
       },
     ],
     [
@@ -400,6 +740,28 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "clasificar",
+        categorias: ["Válido", "Inválido"],
+        elementos: [
+          {
+            texto: "int arr[5];",
+            categoria: 0,
+          },
+          {
+            texto: "int[5] arr;",
+            categoria: 1,
+          },
+          {
+            texto: "int *p;",
+            categoria: 0,
+          },
+          {
+            texto: "int p*;",
+            categoria: 1,
+          },
+        ],
+      },
+      {
         tipo: "completarEspacios",
         texto: "Para obtener la dirección de memoria de una variable 'x' se usa el operador ___.",
         espacios: [
@@ -407,6 +769,15 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             aceptadas: ["&"],
           },
         ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe una función 'suma' que reciba un array de enteros y su tamaño, y devuelva la suma de todos.",
+        lenguaje: "c",
+        codigoInicial: "int suma(int arr[], int tam) {\n  \n}",
+        solucion:
+          "int suma(int arr[], int tam) {\n  int total = 0;\n  for (int i = 0; i < tam; i++) {\n    total += arr[i];\n  }\n  return total;\n}",
       },
     ],
   ],
@@ -481,6 +852,26 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "type y name pueden repetirse entre varios inputs porque describen la naturaleza o la agrupación del campo: por ejemplo, varios radios comparten el mismo name para agruparse y comportarse como un conjunto de opciones mutuamente excluyentes.\n\nvalue, en cambio, es el dato específico de cada opción — si dos radios del mismo grupo tuvieran el mismo value, no podrías distinguir cuál eligió el usuario.",
       },
       {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "type",
+            derecha:
+              "Describe qué clase de campo es (texto, radio, checkbox...); se repite entre inputs del mismo tipo",
+          },
+          {
+            izquierda: "name",
+            derecha:
+              "Agrupa varios inputs (ej. radios) para que se comporten como un solo conjunto de opciones",
+          },
+          {
+            izquierda: "value",
+            derecha:
+              "El dato específico de una opción; debe ser distinto en cada radio de un mismo grupo",
+          },
+        ],
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           'Tenés 3 radios con name="plan" y, por error, los tres tienen value="basico". ¿Qué problema concreto vas a tener al leer el formulario enviado?',
@@ -530,11 +921,36 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           "gap es el espacio entre elementos hijos de un contenedor flex o grid — no se aplica en los bordes exteriores del contenedor.\n\nmargin es el espacio alrededor de un elemento individual, y sí afecta también el exterior: por ejemplo, empuja el elemento lejos de los bordes del contenedor o de otros elementos, incluso fuera de un contexto flex o grid.",
       },
       {
+        tipo: "clasificar",
+        categorias: [
+          "Espacio exterior de un elemento individual",
+          "Espacio entre hijos de un contenedor flex/grid",
+        ],
+        elementos: [
+          {
+            texto: "margin",
+            categoria: 0,
+          },
+          {
+            texto: "gap",
+            categoria: 1,
+          },
+        ],
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "Tenés un contenedor flex con gap: 16px y 3 elementos hijos. ¿Ese gap agrega espacio antes del primer hijo y después del último? ¿Por qué sí o por qué no?",
         solucion:
           "No. gap solo agrega espacio ENTRE los hijos (entre el 1º y el 2º, y entre el 2º y el 3º) — nunca en los bordes exteriores del contenedor. Si además se quiere espacio antes del primero o después del último, hay que agregarlo aparte, con padding en el contenedor o margin en esos hijos específicos.",
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Tenés 3 elementos .chip dentro de .fila (display: flex). Escribe el CSS para que haya 8px de espacio entre cada chip, sin que se agregue espacio extra en los bordes izquierdo/derecho de .fila.",
+        lenguaje: "css",
+        codigoInicial: ".fila {\n  \n}",
+        solucion: ".fila {\n  display: flex;\n  gap: 8px;\n}",
       },
     ],
     [
@@ -640,10 +1056,49 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "clasificar",
+        categorias: ["Va dentro de <head>", "Va dentro de <body>"],
+        elementos: [
+          {
+            texto: "<title>",
+            categoria: 0,
+          },
+          {
+            texto: "<meta charset>",
+            categoria: 0,
+          },
+          {
+            texto: "<article>",
+            categoria: 1,
+          },
+          {
+            texto: "<section>",
+            categoria: 1,
+          },
+        ],
+      },
+      {
         tipo: "teoria",
         titulo: "<article> vs. <section>",
         texto:
           "<article> representa contenido independiente y autocontenido, que tendría sentido por sí solo fuera de contexto — por ejemplo, un post de blog o una noticia.\n\n<section> agrupa contenido temáticamente relacionado dentro de una página o dentro de un artículo, pero no necesariamente tiene sentido de forma aislada.",
+      },
+      {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "article",
+            derecha: "Contenido independiente y autocontenido, como un post de blog o una noticia",
+          },
+          {
+            izquierda: "section",
+            derecha: "Agrupa contenido temáticamente relacionado dentro de una página o artículo",
+          },
+          {
+            izquierda: "title",
+            derecha: "Va en head; define el título de la pestaña, no es visible en el body",
+          },
+        ],
       },
       {
         tipo: "preguntaAbierta",
@@ -651,6 +1106,16 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           'Una página de blog tiene un artículo completo, y dentro de ese artículo hay dos partes bien diferenciadas: "Introducción" y "Conclusión". ¿Qué etiquetas usarías para cada nivel, y por qué?',
         solucion:
           'El post completo iría en un <article>, porque es contenido independiente y autocontenido (tendría sentido si se compartiera o leyera por separado). Dentro de ese <article>, "Introducción" y "Conclusión" irían cada una en su propio <section>, porque son agrupaciones temáticas relacionadas dentro del mismo artículo, pero no tendrían sentido como piezas de contenido totalmente independientes por sí solas.',
+      },
+      {
+        tipo: "ordenar",
+        consigna: "Ordena estas partes de un documento HTML de afuera hacia adentro.",
+        elementos: [
+          "<html>",
+          "<head> y <body> (hermanos, dentro de <html>)",
+          "<article> (dentro de <body>)",
+          "<section> (dentro del <article>)",
+        ],
       },
     ],
     [
@@ -708,6 +1173,32 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "clasificar",
+        categorias: ["Se vuelve contenedor flex", "Se vuelve elemento flex"],
+        elementos: [
+          {
+            texto: "El elemento con display: flex",
+            categoria: 0,
+          },
+          {
+            texto: "Cada hijo directo de ese elemento",
+            categoria: 1,
+          },
+          {
+            texto: "Un div con display: flex dentro de otro flex item",
+            categoria: 0,
+          },
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe el CSS para que .lista sea un contenedor flex con sus elementos en columna (uno debajo del otro) en vez de en fila.",
+        lenguaje: "css",
+        codigoInicial: ".lista {\n  \n}",
+        solucion: ".lista {\n  display: flex;\n  flex-direction: column;\n}",
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "¿Qué diferencia hay entre el eje principal y el eje cruzado, y por qué importa saber cuál es cuál antes de usar justify-content o align-items?",
@@ -758,6 +1249,65 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         ],
       },
       {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "flex-start",
+            derecha: "Agrupa los elementos al inicio del eje principal",
+          },
+          {
+            izquierda: "space-between",
+            derecha: "Reparte el espacio entre elementos, sin dejar hueco en los extremos",
+          },
+          {
+            izquierda: "space-evenly",
+            derecha: "Reparte el espacio en partes exactamente iguales, extremos incluidos",
+          },
+          {
+            izquierda: "center",
+            derecha: "Agrupa todos los elementos en el centro del contenedor",
+          },
+        ],
+      },
+      {
+        tipo: "clasificar",
+        categorias: ["Deja espacio en los extremos", "No deja espacio en los extremos"],
+        elementos: [
+          {
+            texto: "flex-start",
+            categoria: 1,
+          },
+          {
+            texto: "flex-end",
+            categoria: 1,
+          },
+          {
+            texto: "center",
+            categoria: 1,
+          },
+          {
+            texto: "space-between",
+            categoria: 1,
+          },
+          {
+            texto: "space-around",
+            categoria: 0,
+          },
+          {
+            texto: "space-evenly",
+            categoria: 0,
+          },
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .navbar tiene un logo y tres links como hijos directos. Escribe el CSS para que sea un contenedor flex y los cuatro elementos queden con exactamente el mismo espacio entre ellos y también en los bordes del navbar.",
+        lenguaje: "css",
+        codigoInicial: ".navbar {\n  \n}",
+        solucion: ".navbar {\n  display: flex;\n  justify-content: space-evenly;\n}",
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "Tienes un contenedor con 3 elementos y justify-content: space-between. Si le agregas un cuarto elemento hasta llenar todo el ancho del contenedor, ¿qué pasa visualmente con el efecto de justify-content?",
@@ -804,6 +1354,36 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             aceptadas: ["align-items"],
           },
         ],
+      },
+      {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "stretch",
+            derecha:
+              "Estira los elementos para llenar la altura del contenedor (valor por defecto)",
+          },
+          {
+            izquierda: "center",
+            derecha: "Centra los elementos en el eje cruzado",
+          },
+          {
+            izquierda: "flex-end",
+            derecha: "Alinea los elementos al final del eje cruzado",
+          },
+          {
+            izquierda: "baseline",
+            derecha: "Alinea los elementos por la línea base de su texto",
+          },
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Una .tarjeta tiene un ícono y un texto como hijos directos, de distinta altura. Escribe el CSS para que sea un contenedor flex y ambos hijos queden centrados verticalmente entre sí.",
+        lenguaje: "css",
+        codigoInicial: ".tarjeta {\n  \n}",
+        solucion: ".tarjeta {\n  display: flex;\n  align-items: center;\n}",
       },
       {
         tipo: "tarjeta",
@@ -857,6 +1437,42 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
             aceptadas: ["flex"],
           },
         ],
+      },
+      {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "flex-grow",
+            derecha: "Cuánto crece el elemento para ocupar espacio libre sobrante",
+          },
+          {
+            izquierda: "flex-shrink",
+            derecha: "Cuánto se encoge el elemento cuando falta espacio",
+          },
+          {
+            izquierda: "flex-basis",
+            derecha: "El tamaño inicial del elemento antes de repartir espacio libre",
+          },
+        ],
+      },
+      {
+        tipo: "ordenar",
+        consigna:
+          "Ordena los pasos para construir un layout de 3 columnas de igual ancho usando Flexbox.",
+        elementos: [
+          "Envolver las tres columnas en un contenedor .layout",
+          "Aplicar display: flex a .layout",
+          "Aplicar flex: 1 a cada una de las tres columnas hijas",
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Tienes un .layout con dos hijos directos: .sidebar (debe medir siempre 200px fijos) y .main (debe ocupar todo el espacio restante). Escribe el CSS necesario para las tres clases.",
+        lenguaje: "css",
+        codigoInicial: ".layout {\n  \n}\n\n.sidebar {\n  \n}\n\n.main {\n  \n}",
+        solucion:
+          ".layout {\n  display: flex;\n}\n\n.sidebar {\n  width: 200px;\n}\n\n.main {\n  flex: 1;\n}",
       },
       {
         tipo: "preguntaAbierta",
@@ -924,6 +1540,35 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "emparejar",
+        parejas: [
+          {
+            izquierda: "align-items",
+            derecha: "Alinea los elementos dentro de su propia línea, en el eje cruzado",
+          },
+          {
+            izquierda: "align-content",
+            derecha: "Distribuye el espacio entre varias líneas cuando hay wrap",
+          },
+          {
+            izquierda: "wrap-reverse",
+            derecha: "Envuelve a nueva línea, pero apila las líneas en orden inverso",
+          },
+          {
+            izquierda: "nowrap",
+            derecha: "Fuerza todo a una sola línea, encogiendo los elementos si es necesario",
+          },
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .catalogo tiene muchas .tarjeta como hijas, cada una con un ancho mínimo. Escribe el CSS para que sea un contenedor flex que las acomode en filas, pasando a una nueva línea cuando no quepan más en el ancho disponible.",
+        lenguaje: "css",
+        codigoInicial: ".catalogo {\n  \n}",
+        solucion: ".catalogo {\n  display: flex;\n  flex-wrap: wrap;\n}",
+      },
+      {
         tipo: "preguntaAbierta",
         pregunta:
           "Tienes 6 tarjetas de 200px cada una dentro de un contenedor de 500px con flex-wrap: nowrap. ¿Qué pasa visualmente, y cómo lo arreglarías con lo visto en esta lección?",
@@ -988,6 +1633,35 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
         correcta: 0,
       },
       {
+        tipo: "clasificar",
+        categorias: [
+          "Solo afecta el orden visual (DOM intacto)",
+          "Cambia el contenido/orden real del HTML",
+        ],
+        elementos: [
+          {
+            texto: "Poner order: 1 en un elemento con CSS",
+            categoria: 0,
+          },
+          {
+            texto: "Mover la etiqueta <li> a otra posición en el HTML",
+            categoria: 1,
+          },
+          {
+            texto: "Poner order: -1 en un elemento con CSS",
+            categoria: 0,
+          },
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .lista-chips es un contenedor flex con varios .chip como hijos. Escribe el CSS para que haya 12px de espacio entre cada chip, sin usar margin.",
+        lenguaje: "css",
+        codigoInicial: ".lista-chips {\n  \n}",
+        solucion: ".lista-chips {\n  display: flex;\n  gap: 12px;\n}",
+      },
+      {
         tipo: "tarjeta",
         frente: "order",
         reverso:
@@ -1030,6 +1704,42 @@ export const ACTIVIDADES_PROTOTIPO: Record<string, Actividad[][]> = {
           },
         ],
         correcta: 0,
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Escribe el CSS para .pantalla (el contenedor) de modo que un único .modal hijo quede perfectamente centrado, tanto horizontal como verticalmente.",
+        lenguaje: "css",
+        codigoInicial: ".pantalla {\n  height: 100vh;\n  \n}",
+        solucion:
+          ".pantalla {\n  height: 100vh;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n}",
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Un .navbar tiene un .logo y una .lista-links como únicos hijos directos. Escribe el CSS para que queden en extremos opuestos (logo a la izquierda, links a la derecha) y ambos centrados verticalmente entre sí.",
+        lenguaje: "css",
+        codigoInicial: ".navbar {\n  \n}",
+        solucion:
+          ".navbar {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}",
+      },
+      {
+        tipo: "ordenar",
+        consigna:
+          'Ordena los pasos para construir un "sticky footer" (un footer que queda pegado abajo incluso si el contenido es corto) usando Flexbox.',
+        elementos: [
+          "Aplicar min-height: 100vh y display: flex; flex-direction: column; al body",
+          "Dejar que header y footer mantengan su altura natural",
+          "Aplicar flex: 1 al contenedor del contenido principal, para que ocupe todo el espacio sobrante y empuje el footer hacia abajo",
+        ],
+      },
+      {
+        tipo: "retoCodigo",
+        consigna:
+          "Completa el patrón de sticky footer: el body ya tiene min-height: 100vh y display: flex; flex-direction: column;. Escribe el CSS que falta para .main-content, de forma que crezca y ocupe todo el espacio sobrante entre el header y el footer.",
+        lenguaje: "css",
+        codigoInicial: ".main-content {\n  \n}",
+        solucion: ".main-content {\n  flex: 1;\n}",
       },
       {
         tipo: "tarjeta",
