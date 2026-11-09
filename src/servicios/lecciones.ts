@@ -1,7 +1,12 @@
 import { bd } from "../config/bd.ts";
 import type { Prisma } from "../generado/prisma/client.ts";
 import { ErrorApi } from "../middleware/errores.ts";
-import { MENSAJES_LECCION, type Actividad, type DetalleLeccion } from "../tipos/contrato.ts";
+import {
+  MENSAJES_LECCION,
+  type Actividad,
+  type DetalleLeccion,
+  type IdiomaCurso,
+} from "../tipos/contrato.ts";
 
 // Una lección para cursarla (spec F03). Solo sale si su curso está publicado y
 // es el de la dirección; en cualquier otro caso, el mismo 404.
@@ -11,6 +16,7 @@ const seleccionLeccion = {
   titulo: true,
   posicion: true,
   actividades: true,
+  curso: { select: { idioma: true } }, // F14
 } satisfies Prisma.LeccionSelect;
 
 type LeccionConActividades = Prisma.LeccionGetPayload<{ select: typeof seleccionLeccion }>;
@@ -22,6 +28,8 @@ function aDetalleLeccion(leccion: LeccionConActividades): DetalleLeccion {
     posicion: leccion.posicion,
     // la columna solo se escribe después de validarActividades
     actividades: leccion.actividades as unknown as Actividad[],
+    // el de su curso: la voz lee las frases en ese idioma (F14)
+    idioma: leccion.curso.idioma as IdiomaCurso,
   };
 }
 

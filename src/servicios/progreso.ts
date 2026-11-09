@@ -75,6 +75,7 @@ export async function traerCursosEmpezados(idUsuario: string): Promise<CursoEmpe
               id: true,
               titulo: true,
               descripcion: true,
+              idPortada: true,
               autor: { select: { id: true, name: true } },
               _count: { select: { lecciones: true } },
             },
@@ -99,6 +100,7 @@ export async function traerCursosEmpezados(idUsuario: string): Promise<CursoEmpe
       descripcion: curso.descripcion,
       autor: { id: curso.autor.id, nombre: curso.autor.name },
       cantidadLecciones: curso._count.lecciones,
+      idPortada: curso.idPortada,
       leccionesCompletadas: 1,
       ultimoAvanceEn: completadaEn.toISOString(),
     });
