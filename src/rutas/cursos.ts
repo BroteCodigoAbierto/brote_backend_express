@@ -17,10 +17,10 @@ export const rutasCursos = Router();
 // La sesión va antes que la validación: sin sesión es 401 aunque los
 // parámetros estén mal.
 
-// Catálogo y búsqueda, de 10 en 10 (spec F02).
+// Catálogo y búsqueda, de 10 en 10 (spec F02), sin los cursos que quien llama ya completó.
 rutasCursos.get("/", requerirSesion, async (req, res) => {
   const consulta = validarConsultaCatalogo(req.query);
-  const respuesta: RespuestaCatalogo = await traerCatalogo(consulta);
+  const respuesta: RespuestaCatalogo = await traerCatalogo(consulta, usuarioDe(res).id);
   res.json(respuesta);
 });
 

@@ -58,10 +58,12 @@ function condicionDespues({ clave, creadoEn, id }: PosicionCurso): Prisma.Sql {
   return Prisma.sql`(clave COLLATE "C", "creadoEn", id COLLATE "C") > (${clave}::text COLLATE "C", CAST(${creadoEn.toISOString()} AS timestamp(3)), ${id}::text COLLATE "C")`;
 }
 
-export async function traerCatalogo({
-  palabras,
-  despues,
-}: ConsultaCatalogo): Promise<RespuestaCatalogo> {
+// Sin los cursos que quien pregunta ya completó: les falta al menos una lección por
+// completar. Siguen en "Mis cursos" y en "Sigue aprendiendo".
+export async function traerCatalogo(
+  { palabras, despues }: ConsultaCatalogo,
+  idUsuario: string,
+): Promise<RespuestaCatalogo> {
   const condiciones = palabras.map(condicionPalabra);
   if (despues) condiciones.push(condicionDespues(despues));
   const donde =
@@ -88,6 +90,13 @@ export async function traerCatalogo({
       FROM curso c
       JOIN "user" u ON u.id = c.id_autor
       WHERE c.publicado
+        AND EXISTS (
+          SELECT 1 FROM leccion l
+          WHERE l.id_curso = c.id
+            AND NOT EXISTS (
+              SELECT 1 FROM progreso p WHERE p.id_leccion = l.id AND p.id_usuario = ${idUsuario}
+            )
+        )
     ) AS publicados
     ${donde}
     ORDER BY clave COLLATE "C", "creadoEn", id COLLATE "C"
