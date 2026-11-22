@@ -108,22 +108,34 @@ export async function subirImagen(
   });
 }
 
+type CursoDelArchivo = { publicado: boolean; idAutor: string; revision: string | null };
+
+function seVeElCurso(curso: CursoDelArchivo, idUsuario: string, esAdministrador: boolean) {
+  if (curso.publicado || curso.idAutor === idUsuario) return true;
+  return esAdministrador && curso.revision === "pendiente";
+}
+
 export type ArchivoImagen = { datos: Buffer; formato: FormatoImagen; huella: string };
 
 // Una imagen se ve donde se ve su curso: la de un borrador o un curso en revisión, solo su
 // autor; la de un curso publicado, cualquiera con sesión. Si no, el mismo 404 que si no
-// existe, para no revelar cursos sin publicar.
-export async function traerImagen(idUsuario: string, idImagen: string): Promise<ArchivoImagen> {
+// existe, para no revelar cursos sin publicar. Decisión 0018: la de un curso en revisión,
+// también un administrador, que lo prueba antes de aprobarlo.
+export async function traerImagen(
+  idUsuario: string,
+  idImagen: string,
+  esAdministrador: boolean,
+): Promise<ArchivoImagen> {
   const imagen = await bd.imagen.findUnique({
     where: { id: idImagen },
     select: {
       datos: true,
       formato: true,
       huella: true,
-      curso: { select: { publicado: true, idAutor: true } },
+      curso: { select: { publicado: true, idAutor: true, revision: true } },
     },
   });
-  if (!imagen || (!imagen.curso.publicado && imagen.curso.idAutor !== idUsuario)) {
+  if (!imagen || !seVeElCurso(imagen.curso, idUsuario, esAdministrador)) {
     throw new ErrorApi(404, MENSAJES_IMAGENES.imagenNoDisponible);
   }
   return {

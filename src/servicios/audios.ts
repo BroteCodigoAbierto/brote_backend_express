@@ -101,22 +101,34 @@ export async function subirAudio(
   });
 }
 
+type CursoDelArchivo = { publicado: boolean; idAutor: string; revision: string | null };
+
+function seVeElCurso(curso: CursoDelArchivo, idUsuario: string, esAdministrador: boolean) {
+  if (curso.publicado || curso.idAutor === idUsuario) return true;
+  return esAdministrador && curso.revision === "pendiente";
+}
+
 export type ArchivoAudio = { datos: Buffer; formato: FormatoAudio; huella: string };
 
 // Un audio se oye donde se ve su curso: el de un borrador o un curso en revisión, solo su
 // autor; el de un curso publicado, cualquiera con sesión. Si no, el mismo 404 que si no
-// existe, para no revelar cursos sin publicar.
-export async function traerAudio(idUsuario: string, idAudio: string): Promise<ArchivoAudio> {
+// existe, para no revelar cursos sin publicar. Decisión 0018: el de un curso en revisión,
+// también un administrador, que lo prueba antes de aprobarlo.
+export async function traerAudio(
+  idUsuario: string,
+  idAudio: string,
+  esAdministrador: boolean,
+): Promise<ArchivoAudio> {
   const audio = await bd.audio.findUnique({
     where: { id: idAudio },
     select: {
       datos: true,
       formato: true,
       huella: true,
-      curso: { select: { publicado: true, idAutor: true } },
+      curso: { select: { publicado: true, idAutor: true, revision: true } },
     },
   });
-  if (!audio || (!audio.curso.publicado && audio.curso.idAutor !== idUsuario)) {
+  if (!audio || !seVeElCurso(audio.curso, idUsuario, esAdministrador)) {
     throw new ErrorApi(404, MENSAJES_AUDIOS.audioNoDisponible);
   }
   return {

@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.12.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.13.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -28,6 +28,8 @@ export type Usuario = {
   nombre: string;
   correo: string;
   creadoEn: string; // ISO 8601
+  // moderación: su correo está en CORREOS_ADMINISTRADORES de la API (decisión 0018)
+  esAdministrador: boolean;
 };
 
 export type RespuestaUsuario = {
@@ -830,4 +832,56 @@ export const MENSAJES_EDITOR = {
   sinLecciones: "No se envió: el curso no tiene lecciones.",
   unaLeccionVacia: "No se envió: hay 1 lección sin actividades.",
   leccionesVacias: "No se envió: hay {n} lecciones sin actividades.", // {n} es 2 o más
+} as const;
+
+// ---------------------------------------------------------------------------
+// Moderación (decisión 0018): un administrador ve en "Mi panel" los cursos en revisión,
+// los prueba y los aprueba o no. Todas las rutas responden 403 a quien no es
+// administrador; las de un curso, 404 si no existe y 409 si ya no está en revisión.
+// ---------------------------------------------------------------------------
+
+// Un curso en "Cursos en revisión". GET /moderacion/cursos
+export type CursoEnRevision = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  nombreAutor: string;
+  cantidadLecciones: number;
+  idPortada: string | null;
+  enviadoEn: string; // ISO 8601: cuándo cambió por última vez, al enviarlo a revisión
+};
+
+export type RespuestaCursosEnRevision = {
+  cursos: CursoEnRevision[]; // del enviado hace más tiempo al más reciente
+};
+
+// GET /moderacion/cursos/:idCurso: todo el curso, para probar sus lecciones antes de
+// decidir. Probar no registra progreso.
+export type CursoEnModeracion = CursoEnRevision & {
+  idioma: IdiomaCurso;
+  daInsignia: boolean;
+  lecciones: DetalleLeccion[]; // por posición, con sus actividades
+};
+
+export type RespuestaCursoEnModeracion = {
+  curso: CursoEnModeracion;
+};
+
+// POST /moderacion/cursos/:idCurso/aprobacion: lo publica. Responde 204.
+
+// POST /moderacion/cursos/:idCurso/rechazo: no se publica y vuelve a borrador; su autor
+// ve "Revisión no aprobada" y el motivo (F06). Responde 204.
+export type CuerpoRechazo = {
+  motivo?: string; // sin él, o vacío, no hay motivo
+};
+
+export const LIMITES_MODERACION = {
+  motivoMax: 1000, // el mismo del CHECK de la base (F06)
+} as const;
+
+export const MENSAJES_MODERACION = {
+  soloAdministradores: "Solo un administrador puede hacer esto.",
+  cursoNoExiste: "Este curso ya no existe.",
+  yaNoEnRevision: "Este curso ya no está en revisión.",
+  motivoLargo: "El motivo puede tener hasta 1000 caracteres.",
 } as const;

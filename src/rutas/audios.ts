@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requerirSesion, usuarioDe } from "../middleware/sesion.ts";
+import { esAdministrador, requerirSesion, usuarioDe } from "../middleware/sesion.ts";
 import { traerAudio } from "../servicios/audios.ts";
 import { TIPO_MIME_AUDIO } from "../tipos/contrato.ts";
 
@@ -10,7 +10,12 @@ import { TIPO_MIME_AUDIO } from "../tipos/contrato.ts";
 export const rutasAudios = Router();
 
 rutasAudios.get<{ idAudio: string }>("/:idAudio", requerirSesion, async (req, res) => {
-  const { datos, formato, huella } = await traerAudio(usuarioDe(res).id, req.params.idAudio);
+  const usuario = usuarioDe(res);
+  const { datos, formato, huella } = await traerAudio(
+    usuario.id,
+    req.params.idAudio,
+    esAdministrador(usuario),
+  );
   res.set({
     "Content-Type": TIPO_MIME_AUDIO[formato],
     "Cache-Control": "private, max-age=31536000, immutable",

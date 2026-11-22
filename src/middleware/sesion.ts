@@ -1,7 +1,13 @@
 import { fromNodeHeaders } from "better-auth/node";
 import type { NextFunction, Request, Response } from "express";
 import { auth } from "../config/auth.ts";
-import { CABECERA_CLIENTE, CABECERA_TOKEN, MENSAJES_CUENTA } from "../tipos/contrato.ts";
+import { entorno } from "../config/entorno.ts";
+import {
+  CABECERA_CLIENTE,
+  CABECERA_TOKEN,
+  MENSAJES_CUENTA,
+  MENSAJES_MODERACION,
+} from "../tipos/contrato.ts";
 import { ErrorApi } from "./errores.ts";
 
 export type UsuarioAuth = typeof auth.$Infer.Session.user;
@@ -48,4 +54,17 @@ export async function requerirSesion(req: Request, res: Response, siguiente: Nex
 
 export function usuarioDe(res: Response): UsuarioAuth {
   return res.locals.usuario as UsuarioAuth;
+}
+
+// Decisión 0018: administrador es quien tiene su correo en CORREOS_ADMINISTRADORES.
+export function esAdministrador(user: UsuarioAuth): boolean {
+  return entorno.correosAdministradores.includes(user.email.toLowerCase());
+}
+
+// Va después de requerirSesion: sin sesión es 401 y, con sesión, sin ser administrador 403.
+export function requerirAdministrador(_req: Request, res: Response, siguiente: NextFunction) {
+  if (!esAdministrador(usuarioDe(res))) {
+    throw new ErrorApi(403, MENSAJES_MODERACION.soloAdministradores);
+  }
+  siguiente();
 }

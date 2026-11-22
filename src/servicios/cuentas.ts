@@ -2,7 +2,7 @@ import { isAPIError } from "better-auth/api";
 import { auth } from "../config/auth.ts";
 import { bd } from "../config/bd.ts";
 import { ErrorApi } from "../middleware/errores.ts";
-import type { UsuarioAuth } from "../middleware/sesion.ts";
+import { esAdministrador, type UsuarioAuth } from "../middleware/sesion.ts";
 import {
   MENSAJES_CUENTA,
   type CuerpoCrearCuenta,
@@ -22,6 +22,7 @@ export function aUsuario(user: UsuarioAuth): Usuario {
     nombre: user.name,
     correo: user.email,
     creadoEn: user.createdAt.toISOString(),
+    esAdministrador: esAdministrador(user),
   };
 }
 

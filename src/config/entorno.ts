@@ -20,6 +20,15 @@ function leerSecreto(nombre: string): string {
 
 const puerto = Number(leer("PUERTO", "3000"));
 
+// Decisión 0018: los administradores no se guardan en la base, se nombran aquí. Sin
+// la variable no hay ninguno y los cursos se aprueban como antes, en la base.
+function leerCorreos(nombre: string): string[] {
+  return (process.env[nombre] ?? "")
+    .split(",")
+    .map((correo) => correo.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export const entorno = {
   puerto,
   // orígenes que pueden llamar a la API desde el navegador, separados por coma
@@ -28,4 +37,6 @@ export const entorno = {
   secretoAuth: leerSecreto("SECRETO_AUTH"),
   // URL pública de esta API; Better Auth la usa para sus cookies
   urlApi: leer("URL_API", `http://localhost:${puerto}`),
+  // correos de quienes aprueban cursos desde "Mi panel", separados por coma
+  correosAdministradores: leerCorreos("CORREOS_ADMINISTRADORES"),
 };
