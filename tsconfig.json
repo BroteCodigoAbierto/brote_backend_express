@@ -14,5 +14,5 @@
     "noUnusedParameters": true,
     "skipLibCheck": true
   },
-  "include": ["src", "scripts", "prisma.config.ts"]
+  "include": ["src", "scripts", "api", "prisma.config.ts"]
 }
