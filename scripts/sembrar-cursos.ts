@@ -204,6 +204,7 @@ try {
             publicado: curso.publicado,
             revision: curso.revision ?? null,
             idioma: curso.idioma ?? "es",
+            daInsignia: curso.daInsignia ?? false,
             idAutor: idPorCorreo.get(curso.correoAutor)!,
           },
           select: { id: true },

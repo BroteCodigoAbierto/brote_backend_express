@@ -29,6 +29,7 @@ export type CursoPrueba = {
   lecciones: LeccionPrueba[]; // en orden
   portadaPrueba?: string; // F13: el nombre de una imagen de IMAGENES_PRUEBA
   idioma?: IdiomaCurso; // F14: sin él, "es"
+  daInsignia?: boolean; // F08: sin él, sin insignia
 };
 
 export type LeccionPrueba = { titulo: string; actividades: Actividad[] };
@@ -128,6 +129,7 @@ const manifiestos: CursoManifiesto[] = [
       "Tus primeros pasos en japonés: hiragana, saludos, números y cómo presentarte. Sin conocimientos previos.",
     publicado: true,
     idioma: "ja", // F14: la voz lee el hiragana
+    daInsignia: true, // F08: quien lo completa gana su insignia
     lecciones: ["Hiragana: las vocales", "Saludos", "Números del 1 al 5", "Preséntate"],
   },
   {
@@ -755,6 +757,32 @@ const leccionCompleta: LeccionPrueba = {
 };
 
 const extras: CursoPrueba[] = [
+  // F08: publicado, corto y con insignia, para ganarla en un minuto (quickstart de F08)
+  {
+    correoAutor: AUTOR,
+    titulo: "Insignia rápida",
+    descripcion: "Dos lecciones cortas de teoría. Al terminarlas ganas su insignia.",
+    publicado: true,
+    daInsignia: true,
+    lecciones: [
+      {
+        titulo: "Primera parte",
+        actividades: [
+          { tipo: "teoria", titulo: "Bienvenida", texto: "Esta es la primera de dos lecciones." },
+        ],
+      },
+      {
+        titulo: "Segunda parte",
+        actividades: [
+          {
+            tipo: "teoria",
+            titulo: "Casi listo",
+            texto: "Al terminar esta lección ganas la insignia.",
+          },
+        ],
+      },
+    ],
+  },
   {
     correoAutor: AUTOR,
     titulo: "Curso en borrador",

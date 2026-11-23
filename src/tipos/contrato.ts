@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.11.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.12.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -641,6 +641,8 @@ export type CuerpoProgresoLeccion = {
 
 export type RespuestaProgresoLeccion = {
   progreso: ProgresoLeccion;
+  // F08: la insignia que ganó con esta lección; null si no ganó ninguna nueva
+  insigniaNueva: InsigniaCurso | null;
 };
 
 // Un curso con al menos una lección completada por quien pregunta.
@@ -651,6 +653,23 @@ export type CursoEmpezado = ResumenCurso & {
 
 export type RespuestaCursosEmpezados = {
   cursos: CursoEmpezado[]; // del avance más reciente al más antiguo
+};
+
+// ---------------------------------------------------------------------------
+// Insignias (F08)
+// ---------------------------------------------------------------------------
+
+// Que el usuario completó un curso que daba insignia. Se dibuja con la portada del curso.
+export type InsigniaCurso = {
+  idCurso: string;
+  titulo: string;
+  idPortada: string | null; // la del curso; si no carga, la portada generada
+  ganadaEn: string; // ISO 8601
+};
+
+// GET /usuarios/yo/insignias
+export type RespuestaInsignias = {
+  insignias: InsigniaCurso[]; // de la más reciente a la más antigua
 };
 
 export const MENSAJES_PROGRESO = {
@@ -686,6 +705,8 @@ export type CuerpoDatosCurso = {
   idPortada?: string | null;
   // F14: sin él no cambia; el POST sin él crea el curso en "es"
   idioma?: IdiomaCurso;
+  // F08: sin él no cambia; el POST sin él crea el curso sin insignia
+  daInsignia?: boolean;
 };
 
 // Una lección en el mapa del curso.
@@ -698,6 +719,7 @@ export type CursoEnEditor = {
   titulo: string;
   descripcion: string;
   idioma: IdiomaCurso; // F14
+  daInsignia: boolean; // F08
   estado: EstadoCurso;
   revisionRechazada: boolean;
   motivoRechazo: string | null; // puede haber rechazo sin motivo

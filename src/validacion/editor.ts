@@ -69,12 +69,21 @@ function idiomaDe(cuerpo: unknown): { valor?: IdiomaCurso; error?: string } {
   return { error: MENSAJES_EDITOR.datosInvalidos };
 }
 
+// F08: sin daInsignia no cambia (el POST crea el curso sin insignia); si viene, es booleano.
+function daInsigniaDe(cuerpo: unknown): { valor?: boolean; error?: string } {
+  if (!esObjeto(cuerpo) || !("daInsignia" in cuerpo)) return {};
+  const { daInsignia } = cuerpo;
+  if (typeof daInsignia === "boolean") return { valor: daInsignia };
+  return { error: MENSAJES_EDITOR.datosInvalidos };
+}
+
 // El título se guarda recortado; la descripción, tal como se escribió.
 export function validarDatosCurso(cuerpo: unknown): CuerpoDatosCurso {
   const titulo = texto(cuerpo, "titulo").trim();
   const descripcion = texto(cuerpo, "descripcion");
   const portada = idPortadaDe(cuerpo);
   const idioma = idiomaDe(cuerpo);
+  const daInsignia = daInsigniaDe(cuerpo);
   const errores: Errores = {};
   const errorTitulo = errorDeTexto(titulo, LIMITES_CURSO.tituloMax);
   const errorDescripcion = errorDeTexto(descripcion, LIMITES_CURSO.descripcionMax);
@@ -82,12 +91,14 @@ export function validarDatosCurso(cuerpo: unknown): CuerpoDatosCurso {
   if (errorDescripcion) errores.descripcion = errorDescripcion;
   if (portada.error) errores.portada = portada.error;
   if (idioma.error) errores.idioma = idioma.error;
+  if (daInsignia.error) errores.daInsignia = daInsignia.error;
   lanzarSiHayErrores(errores);
   return {
     titulo,
     descripcion,
     ...(portada.valor !== undefined && { idPortada: portada.valor }),
     ...(idioma.valor && { idioma: idioma.valor }),
+    ...(daInsignia.valor !== undefined && { daInsignia: daInsignia.valor }),
   };
 }
 
