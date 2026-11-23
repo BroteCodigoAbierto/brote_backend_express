@@ -56,9 +56,13 @@ rutasCursos.put<{ idCurso: string; idLeccion: string }>(
   async (req, res) => {
     const { idCurso, idLeccion } = req.params;
     const cuerpo = validarCuerpoProgreso(req.body);
-    const respuesta: RespuestaProgresoLeccion = {
-      progreso: await registrarProgreso(usuarioDe(res).id, idCurso, idLeccion, cuerpo),
-    };
+    // F08: con la insignia que haya completado esta lección (o null)
+    const respuesta: RespuestaProgresoLeccion = await registrarProgreso(
+      usuarioDe(res).id,
+      idCurso,
+      idLeccion,
+      cuerpo,
+    );
     res.json(respuesta);
   },
 );

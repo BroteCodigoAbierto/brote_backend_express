@@ -7,7 +7,9 @@ import {
   type Actividad,
   type CuerpoProgresoLeccion,
   type CursoEmpezado,
+  type InsigniaCurso,
   type ProgresoLeccion,
+  type RespuestaProgresoLeccion,
 } from "../tipos/contrato.ts";
 import { dondeLeccionPublicada } from "./lecciones.ts";
 
@@ -28,15 +30,51 @@ export function aProgresoLeccion({
   return { aciertos, preguntas, completadaEn: completadaEn.toISOString() };
 }
 
+// F08: si el curso da insignia y el alumno ya completó todas las lecciones que tiene hoy,
+// se la da. createMany con skipDuplicates (ON CONFLICT DO NOTHING): si dos dispositivos
+// terminan a la vez, solo uno crea la fila y solo ese la anuncia como nueva (brote_specs,
+// research de F08, puntos 2 y 3).
+async function darInsigniaSiCompleto(
+  idUsuario: string,
+  idCurso: string,
+): Promise<InsigniaCurso | null> {
+  const curso = await bd.curso.findUnique({
+    where: { id: idCurso },
+    select: { daInsignia: true, titulo: true, idPortada: true },
+  });
+  if (!curso?.daInsignia) return null;
+  const [lecciones, completadas] = await Promise.all([
+    bd.leccion.count({ where: { idCurso } }),
+    bd.progreso.count({ where: { idUsuario, leccion: { idCurso } } }),
+  ]);
+  if (lecciones === 0 || completadas < lecciones) return null;
+  const { count } = await bd.insignia.createMany({
+    data: [{ idUsuario, idCurso }],
+    skipDuplicates: true,
+  });
+  if (count === 0) return null;
+  const { ganadaEn } = await bd.insignia.findUniqueOrThrow({
+    where: { idUsuario_idCurso: { idUsuario, idCurso } },
+    select: { ganadaEn: true },
+  });
+  return {
+    idCurso,
+    titulo: curso.titulo,
+    idPortada: curso.idPortada,
+    ganadaEn: ganadaEn.toISOString(),
+  };
+}
+
 // Solo lecciones que se pueden abrir (el mismo 404 que F03) y con un resultado
 // que cuadre con las preguntas que la lección tiene hoy. No se recalifican las
-// respuestas: el cliente ya las conoce (research, punto 1).
+// respuestas: el cliente ya las conoce (research, punto 1). F08: además, la
+// insignia que esta lección haya completado.
 export async function registrarProgreso(
   idUsuario: string,
   idCurso: string,
   idLeccion: string,
   { aciertos, preguntas }: CuerpoProgresoLeccion,
-): Promise<ProgresoLeccion> {
+): Promise<RespuestaProgresoLeccion> {
   const leccion = await bd.leccion.findFirst({
     where: dondeLeccionPublicada(idCurso, idLeccion),
     select: { actividades: true },
@@ -56,7 +94,30 @@ export async function registrarProgreso(
     update: { aciertos, preguntas, completadaEn: new Date() },
     select: { aciertos: true, preguntas: true, completadaEn: true },
   });
-  return aProgresoLeccion(fila);
+  return {
+    progreso: aProgresoLeccion(fila),
+    insigniaNueva: await darInsigniaSiCompleto(idUsuario, idCurso),
+  };
+}
+
+// F08: las insignias de quien llama, de la más reciente a la más antigua. Incluye cursos
+// que ya no están publicados: una insignia ganada no se pierde (research de F08, punto 4).
+export async function traerInsignias(idUsuario: string): Promise<InsigniaCurso[]> {
+  const filas = await bd.insignia.findMany({
+    where: { idUsuario },
+    orderBy: [{ ganadaEn: "desc" }, { idCurso: "asc" }],
+    select: {
+      idCurso: true,
+      ganadaEn: true,
+      curso: { select: { titulo: true, idPortada: true } },
+    },
+  });
+  return filas.map(({ idCurso, ganadaEn, curso }) => ({
+    idCurso,
+    titulo: curso.titulo,
+    idPortada: curso.idPortada,
+    ganadaEn: ganadaEn.toISOString(),
+  }));
 }
 
 // Los cursos publicados con alguna lección completada, del que avanzó más
