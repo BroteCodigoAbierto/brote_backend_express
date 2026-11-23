@@ -2,10 +2,11 @@ import { Router } from "express";
 import { requerirSesion, usuarioDe } from "../middleware/sesion.ts";
 import { aUsuario } from "../servicios/cuentas.ts";
 import { traerCursosDelAutor } from "../servicios/editor.ts";
-import { traerCursosEmpezados } from "../servicios/progreso.ts";
+import { traerCursosEmpezados, traerInsignias } from "../servicios/progreso.ts";
 import type {
   RespuestaCursosDelAutor,
   RespuestaCursosEmpezados,
+  RespuestaInsignias,
   RespuestaUsuario,
 } from "../tipos/contrato.ts";
 
@@ -31,5 +32,11 @@ rutasUsuarios.get("/yo/cursos", requerirSesion, async (_req, res) => {
   const respuesta: RespuestaCursosDelAutor = {
     cursos: await traerCursosDelAutor(usuarioDe(res).id),
   };
+  res.json(respuesta);
+});
+
+// Las insignias de quien llama (spec F08: "Mis insignias").
+rutasUsuarios.get("/yo/insignias", requerirSesion, async (_req, res) => {
+  const respuesta: RespuestaInsignias = { insignias: await traerInsignias(usuarioDe(res).id) };
   res.json(respuesta);
 });
