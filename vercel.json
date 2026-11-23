@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run bd:generar && DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" npx prisma migrate deploy && mkdir -p public && printf 'User-agent: *\\nDisallow: /\\n' > public/robots.txt",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+  "buildCommand": "sh scripts/vercel-build.sh",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ]
 }
