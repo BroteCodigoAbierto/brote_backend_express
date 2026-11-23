@@ -35,6 +35,7 @@ model User {
   accounts      Account[]
   cursos        Curso[] // F02: cursos de los que es autor (no crea columnas)
   progresos     Progreso[] // F04: lecciones completadas (no crea columnas)
+  insignias     Insignia[] // F08: cursos completados con insignia (no crea columnas)
 
   @@map("user")
 }
@@ -94,32 +95,35 @@ model Verification {
 // ---------------------------------------------------------------------------
 
 model Curso {
-  id            String    @id @default(uuid(7))
+  id            String     @id @default(uuid(7))
   titulo        String
   descripcion   String
   // solo los publicados se ven; lo pone en true un administrador en la base (decisión
   // 0014), y en false también su autor, al retirarlo del catálogo (F06)
-  publicado     Boolean   @default(false)
+  publicado     Boolean    @default(false)
   // F06: null, "pendiente" o "rechazada". Un trigger de la base limpia estos dos
   // campos cuando cambia `publicado`, y un CHECK valida sus valores (no se ven
   // aquí: están en la migración f06_revision_curso)
   revision      String?
-  motivoRechazo String?   @map("motivo_rechazo")
-  idAutor       String    @map("id_autor")
+  motivoRechazo String?    @map("motivo_rechazo")
+  idAutor       String     @map("id_autor")
   // borrar cuentas está fuera del MVP: un autor con cursos no se puede borrar
-  autor         User      @relation(fields: [idAutor], references: [id], onDelete: Restrict)
-  creadoEn      DateTime  @default(now()) @map("creado_en")
-  actualizadoEn DateTime  @updatedAt @map("actualizado_en")
+  autor         User       @relation(fields: [idAutor], references: [id], onDelete: Restrict)
+  creadoEn      DateTime   @default(now()) @map("creado_en")
+  actualizadoEn DateTime   @updatedAt @map("actualizado_en")
   lecciones     Leccion[]
   // F13: una de sus imágenes, que no sea GIF (lo comprueba el servicio). Si la imagen se
   // borra, el curso se queda con la portada generada
-  idPortada     String?   @map("id_portada")
-  portada       Imagen?   @relation("PortadaCurso", fields: [idPortada], references: [id], onDelete: SetNull)
-  imagenes      Imagen[]  @relation("ImagenesCurso")
+  idPortada     String?    @map("id_portada")
+  portada       Imagen?    @relation("PortadaCurso", fields: [idPortada], references: [id], onDelete: SetNull)
+  imagenes      Imagen[]   @relation("ImagenesCurso")
   // F14: el de la voz que lee las frases de escuchar y repetir, uno de IDIOMAS_CURSO (un
   // CHECK de la migración f14_escuchar_repetir). Los cursos de antes quedaron en "es"
-  idioma        String    @default("es")
-  audios        Audio[]   @relation("AudiosCurso")
+  idioma        String     @default("es")
+  audios        Audio[]    @relation("AudiosCurso")
+  // F08: si quien lo completa gana una insignia; lo cambia su autor en un borrador
+  daInsignia    Boolean    @default(false) @map("da_insignia")
+  insignias     Insignia[]
 
   @@index([idAutor])
   @@map("curso")
@@ -218,4 +222,18 @@ model Audio {
 
   @@unique([idCurso, huella])
   @@map("audio")
+}
+
+// F08: un usuario completó un curso que daba insignia. Una por usuario y curso; no se
+// pierde si el curso cambia, pero se borra con el curso (como el progreso).
+model Insignia {
+  idUsuario String   @map("id_usuario")
+  usuario   User     @relation(fields: [idUsuario], references: [id], onDelete: Cascade)
+  idCurso   String   @map("id_curso")
+  curso     Curso    @relation(fields: [idCurso], references: [id], onDelete: Cascade)
+  ganadaEn  DateTime @default(now()) @map("ganada_en")
+
+  @@id([idUsuario, idCurso])
+  @@index([idCurso])
+  @@map("insignia")
 }
