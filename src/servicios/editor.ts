@@ -117,20 +117,30 @@ async function tocarCurso(tx: Transaccion, idCurso: string) {
 
 // Las actividades se cuentan en la base, para no traerlas todas al mapa.
 async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise<CursoEnEditor> {
-  const { id, titulo, descripcion, idioma, publicado, revision, motivoRechazo, portada } =
-    await cliente.curso.findUniqueOrThrow({
-      where: { id: idCurso },
-      select: {
-        id: true,
-        titulo: true,
-        descripcion: true,
-        idioma: true,
-        publicado: true,
-        revision: true,
-        motivoRechazo: true,
-        portada: { select: seleccionImagen },
-      },
-    });
+  const {
+    id,
+    titulo,
+    descripcion,
+    idioma,
+    daInsignia,
+    publicado,
+    revision,
+    motivoRechazo,
+    portada,
+  } = await cliente.curso.findUniqueOrThrow({
+    where: { id: idCurso },
+    select: {
+      id: true,
+      titulo: true,
+      descripcion: true,
+      idioma: true,
+      daInsignia: true,
+      publicado: true,
+      revision: true,
+      motivoRechazo: true,
+      portada: { select: seleccionImagen },
+    },
+  });
   const lecciones = await cliente.$queryRaw<LeccionEnMapa[]>`
     SELECT id, titulo, posicion, jsonb_array_length(actividades) AS "cantidadActividades"
     FROM leccion
@@ -143,6 +153,7 @@ async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise
     descripcion,
     // el CHECK de la migración solo deja los de IDIOMAS_CURSO
     idioma: idioma as IdiomaCurso,
+    daInsignia,
     estado: estadoDelCurso({ publicado, revision }),
     revisionRechazada: revision === "rechazada",
     motivoRechazo,
@@ -178,14 +189,20 @@ export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAuto
   }));
 }
 
-// F14: sin idioma, en español (el default de la columna).
+// F14: sin idioma, en español (el default de la columna). F08: sin daInsignia, sin insignia.
 export async function crearCurso(
   idAutor: string,
-  { titulo, descripcion, idioma }: CuerpoDatosCurso,
+  { titulo, descripcion, idioma, daInsignia }: CuerpoDatosCurso,
 ): Promise<CursoEnEditor> {
   const curso = await bd.curso.create({
-    data: { titulo, descripcion, idAutor, ...(idioma && { idioma }) },
-    select: { id: true, titulo: true, descripcion: true, idioma: true },
+    data: {
+      titulo,
+      descripcion,
+      idAutor,
+      ...(idioma && { idioma }),
+      ...(daInsignia !== undefined && { daInsignia }),
+    },
+    select: { id: true, titulo: true, descripcion: true, idioma: true, daInsignia: true },
   });
   return {
     ...curso,
@@ -224,11 +241,11 @@ async function comprobarPortada(tx: Transaccion, idCurso: string, idPortada: str
 }
 
 // Sin idPortada la portada no cambia; con null se quita. La anterior se borra si nada más
-// del curso la usa. Sin idioma, tampoco cambia (F14).
+// del curso la usa. Sin idioma, tampoco cambia (F14), ni sin daInsignia (F08).
 export async function actualizarCurso(
   idAutor: string,
   idCurso: string,
-  { titulo, descripcion, idPortada, idioma }: CuerpoDatosCurso,
+  { titulo, descripcion, idPortada, idioma, daInsignia }: CuerpoDatosCurso,
 ): Promise<CursoEnEditor> {
   return conCursoEditable(idAutor, idCurso, async (tx) => {
     const antes = await tx.curso.findUniqueOrThrow({
@@ -243,6 +260,7 @@ export async function actualizarCurso(
         descripcion,
         ...(idPortada !== undefined && { idPortada }),
         ...(idioma && { idioma }),
+        ...(daInsignia !== undefined && { daInsignia }),
       },
     });
     if (idPortada !== undefined && antes.idPortada && antes.idPortada !== idPortada) {
