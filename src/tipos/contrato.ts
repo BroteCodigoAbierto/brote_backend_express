@@ -1,4 +1,4 @@
-// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.13.0).
+// GENERADO desde brote_specs/contrato/contrato.ts (versión 0.14.0).
 // No editar a mano: cambia la copia oficial y corre `npm run contrato:copiar` en brote_specs.
 
 // Contrato de Brote: los tipos que viajan entre la API, la web y el móvil.
@@ -121,6 +121,64 @@ export const ETIQUETA_VOZ: Record<IdiomaCurso, string> = {
   ko: "ko-KR",
 };
 
+// Categorías curadas para filtrar el catálogo (decisión 0020).
+export const CATEGORIAS_CURSO = [
+  "programacion",
+  "idiomas",
+  "matematicas",
+  "ciencias",
+  "herramientas",
+  "arte",
+  "otros",
+] as const;
+
+export type CategoriaCurso = (typeof CATEGORIAS_CURSO)[number];
+
+export const NOMBRE_CATEGORIA: Record<CategoriaCurso, string> = {
+  programacion: "Programación",
+  idiomas: "Idiomas",
+  matematicas: "Matemáticas",
+  ciencias: "Ciencias",
+  herramientas: "Herramientas",
+  arte: "Arte y música",
+  otros: "Otros",
+};
+
+export const NIVELES_CURSO = ["principiante", "intermedio", "avanzado"] as const;
+
+export type NivelCurso = (typeof NIVELES_CURSO)[number];
+
+export const NOMBRE_NIVEL: Record<NivelCurso, string> = {
+  principiante: "Principiante",
+  intermedio: "Intermedio",
+  avanzado: "Avanzado",
+};
+
+export const VISIBILIDADES_CURSO = ["publico", "enlacePrivado", "organizacion"] as const;
+
+export type VisibilidadCurso = (typeof VISIBILIDADES_CURSO)[number];
+
+export const NOMBRE_VISIBILIDAD: Record<VisibilidadCurso, string> = {
+  publico: "Catálogo abierto",
+  enlacePrivado: "Enlace privado",
+  organizacion: "Solo mi organización",
+};
+
+export const ORDENES_CATALOGO = ["destacados", "recientes", "az"] as const;
+
+export type OrdenCatalogo = (typeof ORDENES_CATALOGO)[number];
+
+export const ASPECTOS_INTERFAZ = ["vidrio", "editorial"] as const;
+
+export type AspectoInterfaz = (typeof ASPECTOS_INTERFAZ)[number];
+
+export type ReferenciaOrganizacion = {
+  id: string;
+  slug: string;
+  nombre: string;
+  colorMarca: string | null;
+};
+
 // Lo que muestra la tarjeta de un curso en el catálogo.
 export type ResumenCurso = {
   id: string;
@@ -129,18 +187,36 @@ export type ResumenCurso = {
   autor: AutorCurso;
   cantidadLecciones: number;
   idPortada: string | null; // F13: sin ella, la portada generada
+  idioma: IdiomaCurso; // F14 / F16
+  categoria: CategoriaCurso; // F16
+  nivel: NivelCurso; // F16
+  daInsignia: boolean; // F08 / F16
+  permiteFork: boolean; // F16
+  completado: boolean; // F16: true si el usuario autenticado completó todas las lecciones
+  organizacion: ReferenciaOrganizacion | null; // F16: silo opcional al que pertenece
 };
 
 export type ResumenLeccion = {
   id: string;
   titulo: string;
   posicion: number; // 1, 2, 3, ... en el orden del curso
+  modulo: string | null; // F16: agrupación pedagógica opcional
+};
+
+export type CursoOrigen = {
+  id: string;
+  titulo: string;
+  nombreAutor: string;
 };
 
 // El detalle agrega la lista de lecciones, ordenadas por posición.
 // Desde F04, cada lección trae el progreso de quien pregunta.
 export type DetalleCurso = ResumenCurso & {
-  idioma: IdiomaCurso; // F14
+  etiquetas: string[]; // F16
+  visibilidad: VisibilidadCurso; // F16
+  claveEnlace: string | null; // F16: solo visible para su autor o si se abrió con el enlace
+  tambienPublico: boolean; // F16: curso de organización compartido al catálogo abierto
+  cursoOrigen: CursoOrigen | null; // F16: atribución si nació de una bifurcación (fork)
   lecciones: LeccionDelCurso[];
 };
 
@@ -157,7 +233,7 @@ export type RespuestaCurso = {
 // Longitud de la búsqueda en caracteres Unicode: Array.from(texto).length
 export const LIMITES_CATALOGO = {
   busquedaMax: 100,
-  cursosPorCarga: 10,
+  cursosPorCarga: 12,
 } as const;
 
 export const MENSAJES_CATALOGO = {
@@ -685,7 +761,7 @@ export const MENSAJES_PROGRESO = {
 
 export type EstadoCurso = "borrador" | "enRevision" | "publicado";
 
-// Un curso en "Cursos que creé".
+// Un curso en "Cursos que creé" / Estudio.
 export type CursoDelAutor = {
   id: string;
   titulo: string;
@@ -693,6 +769,12 @@ export type CursoDelAutor = {
   revisionRechazada: boolean; // la última revisión se rechazó; se va al enviarlo otra vez
   cantidadLecciones: number;
   idPortada: string | null; // F13
+  categoria: CategoriaCurso; // F16
+  nivel: NivelCurso; // F16
+  visibilidad: VisibilidadCurso; // F16
+  claveEnlace: string | null; // F16
+  permiteFork: boolean; // F16
+  organizacion: ReferenciaOrganizacion | null; // F16
 };
 
 export type RespuestaCursosDelAutor = {
@@ -709,6 +791,14 @@ export type CuerpoDatosCurso = {
   idioma?: IdiomaCurso;
   // F08: sin él no cambia; el POST sin él crea el curso sin insignia
   daInsignia?: boolean;
+  // F16: metadatos de exploración y silos opcionales
+  categoria?: CategoriaCurso;
+  nivel?: NivelCurso;
+  etiquetas?: string[];
+  visibilidad?: VisibilidadCurso;
+  idOrganizacion?: string | null;
+  tambienPublico?: boolean;
+  permiteFork?: boolean;
 };
 
 // Una lección en el mapa del curso.
@@ -722,6 +812,16 @@ export type CursoEnEditor = {
   descripcion: string;
   idioma: IdiomaCurso; // F14
   daInsignia: boolean; // F08
+  categoria: CategoriaCurso; // F16
+  nivel: NivelCurso; // F16
+  etiquetas: string[]; // F16
+  visibilidad: VisibilidadCurso; // F16
+  claveEnlace: string | null; // F16
+  idOrganizacion: string | null; // F16
+  organizacion: ReferenciaOrganizacion | null; // F16
+  tambienPublico: boolean; // F16
+  permiteFork: boolean; // F16
+  puedePublicarDirecto: boolean; // F16: enlacePrivado u organización donde no requiere revisión
   estado: EstadoCurso;
   revisionRechazada: boolean;
   motivoRechazo: string | null; // puede haber rechazo sin motivo
@@ -738,6 +838,7 @@ export type RespuestaCursoEnEditor = {
 // POST /editor/cursos/:idCurso/lecciones
 export type CuerpoNuevaLeccion = {
   titulo: string;
+  modulo?: string | null; // F16
 };
 
 export type RespuestaLeccionEnMapa = {
@@ -761,6 +862,7 @@ export type RespuestaLeccionEnEditor = {
 // PUT /editor/cursos/:idCurso/lecciones/:idLeccion
 export type CuerpoGuardarLeccion = {
   titulo: string;
+  modulo?: string | null; // F16
   actividades: Actividad[];
   version: number; // la que el autor abrió
   reemplazar?: boolean; // true: guarda aunque haya una versión más nueva
@@ -771,10 +873,13 @@ export const LIMITES_CURSO = {
   tituloMax: 100,
   descripcionMax: 1000,
   leccionesMax: 100,
+  etiquetasMax: 8,
+  etiquetaMax: 30,
 } as const;
 
 export const LIMITES_LECCION = {
   tituloMax: 100,
+  moduloMax: 80,
   actividadesMax: 50,
 } as const;
 
@@ -832,12 +937,15 @@ export const MENSAJES_EDITOR = {
   sinLecciones: "No se envió: el curso no tiene lecciones.",
   unaLeccionVacia: "No se envió: hay 1 lección sin actividades.",
   leccionesVacias: "No se envió: hay {n} lecciones sin actividades.", // {n} es 2 o más
+  // F16
+  noPermiteFork: "Este curso no permite bifurcaciones.",
+  noPuedePublicarDirecto: "Este curso necesita pasar por revisión antes de publicarse.",
+  organizacionNoPermitida: "No tienes permiso para publicar cursos en esa organización.",
+  importacionInvalida: "El archivo JSON del curso no tiene un formato válido.",
 } as const;
 
 // ---------------------------------------------------------------------------
-// Moderación (decisión 0018): un administrador ve en "Mi panel" los cursos en revisión,
-// los prueba y los aprueba o no. Todas las rutas responden 403 a quien no es
-// administrador; las de un curso, 404 si no existe y 409 si ya no está en revisión.
+// Moderación (decisión 0018 y 0020): moderación global o delegada por organización.
 // ---------------------------------------------------------------------------
 
 // Un curso en "Cursos en revisión". GET /moderacion/cursos
@@ -849,6 +957,7 @@ export type CursoEnRevision = {
   cantidadLecciones: number;
   idPortada: string | null;
   enviadoEn: string; // ISO 8601: cuándo cambió por última vez, al enviarlo a revisión
+  organizacion: ReferenciaOrganizacion | null; // F16
 };
 
 export type RespuestaCursosEnRevision = {
@@ -885,3 +994,237 @@ export const MENSAJES_MODERACION = {
   yaNoEnRevision: "Este curso ya no está en revisión.",
   motivoLargo: "El motivo puede tener hasta 1000 caracteres.",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Configuración de instancia (decisión 0020): modo comunidad o self-hosted
+// ---------------------------------------------------------------------------
+
+export const MODOS_INSTANCIA = ["comunidad", "organizacion"] as const;
+
+export type ModoInstancia = (typeof MODOS_INSTANCIA)[number];
+
+export type ConfiguracionInstancia = {
+  modoInstancia: ModoInstancia;
+  nombreInstancia: string;
+  slugOrganizacionFija: string | null;
+};
+
+export type RespuestaConfiguracion = {
+  configuracion: ConfiguracionInstancia;
+};
+
+// ---------------------------------------------------------------------------
+// Silos opcionales: Organizaciones / Espacios (decisión 0020)
+// ---------------------------------------------------------------------------
+
+export const ROLES_ORGANIZACION = ["dueno", "admin", "docente", "alumno"] as const;
+
+export type RolOrganizacion = (typeof ROLES_ORGANIZACION)[number];
+
+export const MODOS_ACCESO_ORGANIZACION = ["abierto", "codigo", "dominio"] as const;
+
+export type ModoAccesoOrganizacion = (typeof MODOS_ACCESO_ORGANIZACION)[number];
+
+export type OrganizacionPublica = {
+  id: string;
+  slug: string;
+  nombre: string;
+  descripcion: string;
+  colorMarca: string | null;
+  modoAcceso: ModoAccesoOrganizacion;
+  cantidadMiembros: number;
+  cantidadCursos: number;
+};
+
+export type OrganizacionPropia = OrganizacionPublica & {
+  rol: RolOrganizacion;
+  codigoAcceso: string | null;
+  dominiosPermitidos: string[];
+  requiereRevision: boolean;
+};
+
+export type CuerpoCrearOrganizacion = {
+  nombre: string;
+  slug: string;
+  descripcion?: string;
+  colorMarca?: string | null;
+  modoAcceso?: ModoAccesoOrganizacion;
+  dominiosPermitidos?: string[];
+  requiereRevision?: boolean;
+};
+
+export type CuerpoUnirseOrganizacion = {
+  codigo: string;
+};
+
+export type RespuestaOrganizacion = {
+  organizacion: OrganizacionPropia;
+};
+
+export type RespuestaOrganizacionPublica = {
+  organizacion: OrganizacionPublica;
+  miRol: RolOrganizacion | null;
+};
+
+export type RespuestaOrganizaciones = {
+  organizaciones: OrganizacionPropia[];
+};
+
+export const LIMITES_ORGANIZACION = {
+  nombreMax: 80,
+  slugMax: 48,
+  descripcionMax: 500,
+  codigoMax: 24,
+} as const;
+
+export const MENSAJES_ORGANIZACION = {
+  noEncontrada: "Esta organización no existe o no tienes acceso.",
+  slugOcupado: "Ese identificador ya está en uso. Prueba con otro.",
+  slugInvalido: "Usa solo letras minúsculas, números y guiones (3 a 48 caracteres).",
+  codigoInvalido: "No encontramos ninguna organización con ese código.",
+  dominioNoPermitido: "Tu correo no pertenece a un dominio autorizado por esta organización.",
+  sinPermiso: "No tienes permisos de administración en esta organización.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Aulas / Grupos con seguimiento docente (decisión 0020)
+// ---------------------------------------------------------------------------
+
+export type GrupoResumen = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  idCurso: string;
+  tituloCurso: string;
+  nombreDocente: string;
+  esDocente: boolean;
+  organizacion: ReferenciaOrganizacion | null;
+  cantidadAlumnos: number;
+  leccionesCompletadas?: number;
+  cantidadLecciones?: number;
+};
+
+export type AvanceAlumnoGrupo = {
+  idUsuario: string;
+  nombre: string;
+  correo: string;
+  leccionesCompletadas: number;
+  totalLecciones: number;
+  aciertosTotales: number;
+  preguntasTotales: number;
+  ultimoAvanceEn: string | null;
+};
+
+export type RespuestaGrupos = {
+  grupos: GrupoResumen[];
+};
+
+export type RespuestaGrupo = {
+  grupo: GrupoResumen;
+};
+
+export type RespuestaAvanceGrupo = {
+  grupo: GrupoResumen;
+  alumnos: AvanceAlumnoGrupo[];
+};
+
+export type CuerpoCrearGrupo = {
+  nombre: string;
+  idCurso: string;
+  idOrganizacion?: string | null;
+};
+
+export type CuerpoUnirseGrupo = {
+  codigo: string;
+};
+
+export const LIMITES_GRUPO = {
+  nombreMax: 80,
+  codigoMax: 20,
+} as const;
+
+export const MENSAJES_GRUPO = {
+  noEncontrado: "Este grupo no existe o no tienes acceso.",
+  codigoInvalido: "No encontramos ningún grupo con ese código.",
+  soloDocente: "Solo el docente del grupo puede consultar el avance.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Reportes de error en actividades (decisión 0020)
+// ---------------------------------------------------------------------------
+
+export type ReporteActividad = {
+  id: string;
+  idCurso: string;
+  tituloCurso: string;
+  idLeccion: string;
+  tituloLeccion: string;
+  indiceActividad: number;
+  mensaje: string;
+  nombreAutorReporte: string;
+  resuelto: boolean;
+  creadoEn: string;
+};
+
+export type CuerpoReporteActividad = {
+  indiceActividad: number;
+  mensaje: string;
+};
+
+export type RespuestaReportes = {
+  reportes: ReporteActividad[];
+};
+
+export const LIMITES_REPORTE = {
+  mensajeMax: 600,
+} as const;
+
+export const MENSAJES_REPORTE = {
+  mensajeVacio: "Describe el error que encontraste.",
+  mensajeLargo: "El reporte puede tener hasta 600 caracteres.",
+  noEncontrado: "Este reporte no existe.",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Perfil público de autor (decisión 0020)
+// ---------------------------------------------------------------------------
+
+export type PerfilAutor = {
+  id: string;
+  nombre: string;
+  creadoEn: string;
+  organizaciones: ReferenciaOrganizacion[];
+  cursos: ResumenCurso[];
+};
+
+export type RespuestaPerfilAutor = {
+  autor: PerfilAutor;
+};
+
+// ---------------------------------------------------------------------------
+// Exportar, Importar JSON (F07) y Bifurcar / Fork (decisión 0020)
+// ---------------------------------------------------------------------------
+
+export type LeccionExportada = {
+  titulo: string;
+  modulo: string | null;
+  actividades: Actividad[];
+};
+
+export type CursoExportado = {
+  formato: "brote-curso-v1";
+  titulo: string;
+  descripcion: string;
+  idioma: IdiomaCurso;
+  categoria: CategoriaCurso;
+  nivel: NivelCurso;
+  etiquetas: string[];
+  daInsignia: boolean;
+  permiteFork: boolean;
+  lecciones: LeccionExportada[];
+};
+
+export type CuerpoForkCurso = {
+  idOrganizacion?: string | null;
+  titulo?: string;
+};

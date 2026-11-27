@@ -3,13 +3,17 @@ import { ErrorApi } from "../middleware/errores.ts";
 import { requerirSesion, usuarioDe } from "../middleware/sesion.ts";
 import {
   actualizarCurso,
+  bifurcarCurso,
   borrarCurso,
   borrarLeccion,
   crearCurso,
   crearLeccion,
   enviarARevision,
+  exportarCurso,
   guardarLeccion,
+  importarCurso,
   ordenarLecciones,
+  publicarDirecto,
   retirarDelCatalogo,
   retirarDeRevision,
   traerCursoEnEditor,
@@ -17,6 +21,7 @@ import {
 } from "../servicios/editor.ts";
 import { subirAudio } from "../servicios/audios.ts";
 import { subirImagen } from "../servicios/imagenes.ts";
+import { cambiarEstadoReporte, traerReportesDelAutor } from "../servicios/reportes.ts";
 import {
   LIMITES_AUDIOS,
   LIMITES_IMAGENES,
@@ -24,38 +29,31 @@ import {
   MENSAJES_IMAGENES,
   TIPO_MIME_IMAGEN,
   TIPOS_MIME_AUDIO_SUBIDA,
+  type CursoExportado,
   type RespuestaAudio,
   type RespuestaCursoEnEditor,
   type RespuestaImagen,
   type RespuestaLeccionEnEditor,
   type RespuestaLeccionEnMapa,
+  type RespuestaReportes,
 } from "../tipos/contrato.ts";
 import {
   validarCuerpoLeccion,
+  validarCursoImportado,
   validarDatosCurso,
+  validarForkCurso,
   validarNuevaLeccion,
   validarOrdenLecciones,
 } from "../validacion/editor.ts";
 import { comprobarAudioSubido } from "../validacion/audios.ts";
 import { comprobarImagenSubida } from "../validacion/imagenes.ts";
+import { validarEstadoReporte } from "../validacion/reportes.ts";
 
-// El editor de cursos (spec F05). Va aparte de /cursos, que solo entrega cursos
-// publicados a cualquiera (brote_specs, research de F05, punto 1). El autor sale
-// siempre de la sesión. Orden: sesión (401), cuerpo (400), curso (404 o 403),
-// lección (404) y versión (409). Enviar y retirar (F06) no llevan cuerpo: sesión
-// (401), curso (404), estado (409) y contenido (400). Subir una imagen (F13): sesión
-// (401), tamaño (413), formato (400), curso (404 o 403) y espacio (400). Subir un audio
-// (F14): sesión (401), tamaño (413), formato, lectura y duración (400), curso (404 o 403) y
-// espacio (400). Los identificadores no se validan: uno que no existe es un 404 como
-// cualquier otro.
+// El editor de cursos (spec F05 + decisión 0020).
 export const rutasEditor = Router();
 
 type ParamsCurso = { idCurso: string };
 
-// El archivo crudo, solo en las rutas de subir (brote_specs, research de F13, punto 2, y de
-// F14, punto 2). Un cuerpo de más de `limite` es un 413 con su mensaje, para no confundirlo
-// con el límite del JSON. Un Content-Type que no es de `tipos` deja el cuerpo sin leer, y la
-// validación responde que el formato no es válido.
 function lectorDeArchivo(tipos: readonly string[], limite: number, mensaje413: string) {
   const lector = express.raw({ type: [...tipos], limit: limite });
   return function leerArchivo(req: Request, res: Response, siguiente: NextFunction) {
@@ -91,11 +89,51 @@ rutasEditor.post("/cursos", requerirSesion, async (req, res) => {
   res.status(201).json(respuesta);
 });
 
+// F07 / F16: importar un JSON portable como borrador nuevo.
+rutasEditor.post("/cursos/importar", requerirSesion, async (req, res) => {
+  const datos = validarCursoImportado(req.body);
+  const respuesta: RespuestaCursoEnEditor = {
+    curso: await importarCurso(usuarioDe(res).id, datos),
+  };
+  res.status(201).json(respuesta);
+});
+
+// F16: reportes de error en actividades de los cursos del autor.
+rutasEditor.get("/reportes", requerirSesion, async (_req, res) => {
+  const respuesta: RespuestaReportes = {
+    reportes: await traerReportesDelAutor(usuarioDe(res).id),
+  };
+  res.json(respuesta);
+});
+
+rutasEditor.patch<{ idReporte: string }>(
+  "/reportes/:idReporte",
+  requerirSesion,
+  async (req, res) => {
+    const { resuelto } = validarEstadoReporte(req.body);
+    const reporte = await cambiarEstadoReporte(usuarioDe(res).id, req.params.idReporte, resuelto);
+    res.json({ reporte });
+  },
+);
+
 rutasEditor.get<ParamsCurso>("/cursos/:idCurso", requerirSesion, async (req, res) => {
   const respuesta: RespuestaCursoEnEditor = {
     curso: await traerCursoEnEditor(usuarioDe(res).id, req.params.idCurso),
   };
   res.json(respuesta);
+});
+
+rutasEditor.get<ParamsCurso>("/cursos/:idCurso/exportar", requerirSesion, async (req, res) => {
+  const exportado: CursoExportado = await exportarCurso(usuarioDe(res).id, req.params.idCurso);
+  res.json(exportado);
+});
+
+rutasEditor.post<ParamsCurso>("/cursos/:idCurso/fork", requerirSesion, async (req, res) => {
+  const cuerpo = validarForkCurso(req.body);
+  const respuesta: RespuestaCursoEnEditor = {
+    curso: await bifurcarCurso(usuarioDe(res).id, req.params.idCurso, cuerpo),
+  };
+  res.status(201).json(respuesta);
 });
 
 rutasEditor.put<ParamsCurso>("/cursos/:idCurso", requerirSesion, async (req, res) => {
@@ -125,7 +163,14 @@ rutasEditor.delete<ParamsCurso>("/cursos/:idCurso/revision", requerirSesion, asy
   res.json(respuesta);
 });
 
-// No hay POST: el autor no puede publicar (decisión 0014).
+// F16: publicación directa para cursos de enlace privado u organizaciones sin revisión obligatoria.
+rutasEditor.post<ParamsCurso>("/cursos/:idCurso/publicacion", requerirSesion, async (req, res) => {
+  const respuesta: RespuestaCursoEnEditor = {
+    curso: await publicarDirecto(usuarioDe(res).id, req.params.idCurso),
+  };
+  res.json(respuesta);
+});
+
 rutasEditor.delete<ParamsCurso>(
   "/cursos/:idCurso/publicacion",
   requerirSesion,

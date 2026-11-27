@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { bd } from "../config/bd.ts";
 import type { Prisma } from "../generado/prisma/client.ts";
 import { ErrorApi } from "../middleware/errores.ts";
 import {
   LIMITES_ARCHIVOS,
   LIMITES_CURSO,
+  MARCA_IMAGEN,
   MENSAJES_ARCHIVOS,
   MENSAJES_AUDIOS,
   MENSAJES_CATALOGO,
@@ -11,15 +13,20 @@ import {
   MENSAJES_IMAGENES,
   MENSAJES_LECCION,
   type Actividad,
+  type CategoriaCurso,
   type CuerpoDatosCurso,
+  type CuerpoForkCurso,
   type CuerpoGuardarLeccion,
   type CuerpoNuevaLeccion,
   type CursoDelAutor,
   type CursoEnEditor,
+  type CursoExportado,
   type EstadoCurso,
   type IdiomaCurso,
   type LeccionEnEditor,
   type LeccionEnMapa,
+  type NivelCurso,
+  type VisibilidadCurso,
 } from "../tipos/contrato.ts";
 import {
   audiosDeActividad,
@@ -31,27 +38,65 @@ import {
 } from "../validacion/actividades.ts";
 import { pesoArchivosCurso } from "./archivos.ts";
 import { audiosDelCurso, borrarAudiosSinUso } from "./audios.ts";
+import { puedeVerCursoPublicado } from "./cursos.ts";
 import { aImagen, borrarSinUso, imagenesDelCurso, seleccionImagen } from "./imagenes.ts";
 
-// El editor de cursos (spec F05). Aquí no llega nada sin validar: el cuerpo lo
-// revisan las rutas con validacion/editor.ts. Lo que depende de la base se
-// comprueba aquí (brote_specs, research de F05, puntos 2 a 6).
+// El editor de cursos (spec F05 + decisión 0020). Aquí no llega nada sin validar:
+// el cuerpo lo revisan las rutas con validacion/editor.ts. Lo que depende de la
+// base se comprueba aquí.
 
 type Transaccion = Prisma.TransactionClient;
 
 type DatosDeEstado = { publicado: boolean; revision: string | null };
 
-// `estado` no se guarda: sale de aquí, y `publicado` manda (brote_specs, research de
-// F06, punto 1).
 function estadoDelCurso({ publicado, revision }: DatosDeEstado): EstadoCurso {
   if (publicado) return "publicado";
   return revision === "pendiente" ? "enRevision" : "borrador";
 }
 
-// Toda acción sobre un curso pasa por aquí: bloquea el curso y comprueba, ya
-// bloqueado, que es de quien llama. Sin el bloqueo, dos altas a la vez calcularían la
-// misma posición, y un curso publicado a media escritura quedaría cambiado sin
-// revisión. Un `UPDATE` a mano del administrador también espera a este bloqueo.
+function generarClaveEnlace(): string {
+  return randomBytes(6).toString("hex");
+}
+
+function recortarUnicode(texto: string, maximo: number): string {
+  return Array.from(texto).slice(0, maximo).join("");
+}
+
+async function comprobarPermisoOrganizacion(
+  cliente: Transaccion,
+  idAutor: string,
+  idOrganizacion: string,
+) {
+  const miembro = await cliente.miembroOrganizacion.findUnique({
+    where: { idOrganizacion_idUsuario: { idOrganizacion, idUsuario: idAutor } },
+    select: { rol: true, organizacion: { select: { requiereRevision: true } } },
+  });
+  if (!miembro || miembro.rol === "alumno") {
+    throw new ErrorApi(403, MENSAJES_EDITOR.organizacionNoPermitida);
+  }
+  return { rol: miembro.rol, requiereRevision: miembro.organizacion.requiereRevision };
+}
+
+async function calcularPuedePublicarDirecto(
+  cliente: Transaccion,
+  idAutor: string,
+  visibilidad: string,
+  idOrganizacion: string | null,
+): Promise<boolean> {
+  if (visibilidad === "enlacePrivado") return true;
+  if (visibilidad === "organizacion" && idOrganizacion) {
+    const miembro = await cliente.miembroOrganizacion.findUnique({
+      where: { idOrganizacion_idUsuario: { idOrganizacion, idUsuario: idAutor } },
+      select: { rol: true, organizacion: { select: { requiereRevision: true } } },
+    });
+    if (!miembro || miembro.rol === "alumno") return false;
+    return (
+      !miembro.organizacion.requiereRevision || miembro.rol === "dueno" || miembro.rol === "admin"
+    );
+  }
+  return false;
+}
+
 async function conCursoDelAutor<T>(
   idAutor: string,
   idCurso: string,
@@ -62,14 +107,11 @@ async function conCursoDelAutor<T>(
     const [curso] = await tx.$queryRaw<(DatosDeEstado & { idAutor: string })[]>`
       SELECT id_autor AS "idAutor", publicado, revision FROM curso WHERE id = ${idCurso} FOR UPDATE
     `;
-    // un curso ajeno responde igual que uno que no existe
     if (curso?.idAutor !== idAutor) throw new ErrorApi(404, mensajeNoExiste);
     return accion(tx, estadoDelCurso(curso));
   });
 }
 
-// Toda escritura en el contenido pasa por aquí. Un curso rechazado es un borrador. La usa
-// también servicios/imagenes.ts: subir una imagen es escribir en el curso (F13).
 export async function conCursoEditable<T>(
   idAutor: string,
   idCurso: string,
@@ -86,7 +128,6 @@ export async function conCursoEditable<T>(
   });
 }
 
-// Lo mismo para abrir una lección: sin bloqueo y con los mensajes de abrir.
 async function comprobarCursoAbierto(idAutor: string, idCurso: string) {
   const curso = await bd.curso.findUnique({
     where: { id: idCurso },
@@ -98,10 +139,6 @@ async function comprobarCursoAbierto(idAutor: string, idCurso: string) {
   if (estado === "enRevision") throw new ErrorApi(403, MENSAJES_EDITOR.cursoEnRevision);
 }
 
-// PostgreSQL comprueba el índice único de (id_curso, posicion) fila por fila:
-// bajar posiciones con un solo UPDATE funciona o falla según cómo recorra la
-// tabla, así que nunca se hace con `decrement`. Primero se niegan y luego se
-// fijan (brote_specs, research de F05, punto 3). No toca `version`.
 async function renumerarLecciones(tx: Transaccion, idCurso: string, idsEnOrden: string[]) {
   await tx.leccion.updateMany({ where: { idCurso }, data: { posicion: { multiply: -1 } } });
   for (const [i, id] of idsEnOrden.entries()) {
@@ -109,32 +146,29 @@ async function renumerarLecciones(tx: Transaccion, idCurso: string, idsEnOrden: 
   }
 }
 
-// Guardar una lección no escribe la fila del curso: sin esto, "Cursos que creé"
-// no lo subiría al primer lugar (research de F05, punto 5).
 async function tocarCurso(tx: Transaccion, idCurso: string) {
   await tx.curso.update({ where: { id: idCurso }, data: { actualizadoEn: new Date() } });
 }
 
-// Las actividades se cuentan en la base, para no traerlas todas al mapa.
 async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise<CursoEnEditor> {
-  const {
-    id,
-    titulo,
-    descripcion,
-    idioma,
-    daInsignia,
-    publicado,
-    revision,
-    motivoRechazo,
-    portada,
-  } = await cliente.curso.findUniqueOrThrow({
+  const curso = await cliente.curso.findUniqueOrThrow({
     where: { id: idCurso },
     select: {
       id: true,
+      idAutor: true,
       titulo: true,
       descripcion: true,
       idioma: true,
       daInsignia: true,
+      categoria: true,
+      nivel: true,
+      etiquetas: true,
+      visibilidad: true,
+      claveEnlace: true,
+      idOrganizacion: true,
+      organizacion: { select: { id: true, slug: true, nombre: true, colorMarca: true } },
+      tambienPublico: true,
+      permiteFork: true,
       publicado: true,
       revision: true,
       motivoRechazo: true,
@@ -142,30 +176,42 @@ async function leerCursoEnEditor(cliente: Transaccion, idCurso: string): Promise
     },
   });
   const lecciones = await cliente.$queryRaw<LeccionEnMapa[]>`
-    SELECT id, titulo, posicion, jsonb_array_length(actividades) AS "cantidadActividades"
+    SELECT id, titulo, modulo, posicion, jsonb_array_length(actividades) AS "cantidadActividades"
     FROM leccion
     WHERE id_curso = ${idCurso}
     ORDER BY posicion
   `;
+  const puedePublicarDirecto = await calcularPuedePublicarDirecto(
+    cliente,
+    curso.idAutor,
+    curso.visibilidad,
+    curso.idOrganizacion,
+  );
   return {
-    id,
-    titulo,
-    descripcion,
-    // el CHECK de la migración solo deja los de IDIOMAS_CURSO
-    idioma: idioma as IdiomaCurso,
-    daInsignia,
-    estado: estadoDelCurso({ publicado, revision }),
-    revisionRechazada: revision === "rechazada",
-    motivoRechazo,
-    portada: portada ? aImagen(portada) : null,
-    // F13 y F14: imágenes y audios, lo que usa más lo que se subió y aún no se guarda
+    id: curso.id,
+    titulo: curso.titulo,
+    descripcion: curso.descripcion,
+    idioma: curso.idioma as IdiomaCurso,
+    daInsignia: curso.daInsignia,
+    categoria: curso.categoria as CategoriaCurso,
+    nivel: curso.nivel as NivelCurso,
+    etiquetas: curso.etiquetas,
+    visibilidad: curso.visibilidad as VisibilidadCurso,
+    claveEnlace: curso.claveEnlace,
+    idOrganizacion: curso.idOrganizacion,
+    organizacion: curso.organizacion,
+    tambienPublico: curso.tambienPublico,
+    permiteFork: curso.permiteFork,
+    puedePublicarDirecto,
+    estado: estadoDelCurso({ publicado: curso.publicado, revision: curso.revision }),
+    revisionRechazada: curso.revision === "rechazada",
+    motivoRechazo: curso.motivoRechazo,
+    portada: curso.portada ? aImagen(curso.portada) : null,
     pesoArchivos: await pesoArchivosCurso(cliente, idCurso),
     lecciones,
   };
 }
 
-// Los cursos de quien llama, publicados o no, del que cambió más recientemente
-// al más antiguo.
 export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAutor[]> {
   const cursos = await bd.curso.findMany({
     where: { idAutor },
@@ -176,56 +222,72 @@ export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAuto
       publicado: true,
       revision: true,
       idPortada: true,
+      categoria: true,
+      nivel: true,
+      visibilidad: true,
+      claveEnlace: true,
+      permiteFork: true,
+      organizacion: { select: { id: true, slug: true, nombre: true, colorMarca: true } },
       _count: { select: { lecciones: true } },
     },
   });
-  return cursos.map(({ id, titulo, publicado, revision, idPortada, _count }) => ({
-    id,
-    titulo,
-    estado: estadoDelCurso({ publicado, revision }),
-    revisionRechazada: revision === "rechazada",
-    cantidadLecciones: _count.lecciones,
-    idPortada,
+  return cursos.map((c) => ({
+    id: c.id,
+    titulo: c.titulo,
+    estado: estadoDelCurso({ publicado: c.publicado, revision: c.revision }),
+    revisionRechazada: c.revision === "rechazada",
+    cantidadLecciones: c._count.lecciones,
+    idPortada: c.idPortada,
+    categoria: c.categoria as CategoriaCurso,
+    nivel: c.nivel as NivelCurso,
+    visibilidad: c.visibilidad as VisibilidadCurso,
+    claveEnlace: c.claveEnlace,
+    permiteFork: c.permiteFork,
+    organizacion: c.organizacion,
   }));
 }
 
-// F14: sin idioma, en español (el default de la columna). F08: sin daInsignia, sin insignia.
-export async function crearCurso(
-  idAutor: string,
-  { titulo, descripcion, idioma, daInsignia }: CuerpoDatosCurso,
-): Promise<CursoEnEditor> {
+export async function crearCurso(idAutor: string, datos: CuerpoDatosCurso): Promise<CursoEnEditor> {
+  const idOrganizacion = datos.idOrganizacion ?? null;
+  const visibilidad: VisibilidadCurso =
+    datos.visibilidad ?? (idOrganizacion ? "organizacion" : "publico");
+
+  if (idOrganizacion) {
+    await comprobarPermisoOrganizacion(bd, idAutor, idOrganizacion);
+  }
+  if (visibilidad === "organizacion" && !idOrganizacion) {
+    throw new ErrorApi(400, MENSAJES_EDITOR.datosInvalidos, {
+      idOrganizacion: MENSAJES_EDITOR.campoObligatorio,
+    });
+  }
+
   const curso = await bd.curso.create({
     data: {
-      titulo,
-      descripcion,
+      titulo: datos.titulo,
+      descripcion: datos.descripcion,
       idAutor,
-      ...(idioma && { idioma }),
-      ...(daInsignia !== undefined && { daInsignia }),
+      ...(datos.idioma && { idioma: datos.idioma }),
+      ...(datos.daInsignia !== undefined && { daInsignia: datos.daInsignia }),
+      ...(datos.categoria && { categoria: datos.categoria }),
+      ...(datos.nivel && { nivel: datos.nivel }),
+      ...(datos.etiquetas && { etiquetas: datos.etiquetas }),
+      visibilidad,
+      claveEnlace: visibilidad === "enlacePrivado" ? generarClaveEnlace() : null,
+      idOrganizacion,
+      tambienPublico: visibilidad === "organizacion" ? Boolean(datos.tambienPublico) : false,
+      ...(datos.permiteFork !== undefined && { permiteFork: datos.permiteFork }),
     },
-    select: { id: true, titulo: true, descripcion: true, idioma: true, daInsignia: true },
+    select: { id: true },
   });
-  return {
-    ...curso,
-    idioma: curso.idioma as IdiomaCurso,
-    estado: "borrador",
-    revisionRechazada: false,
-    motivoRechazo: null,
-    portada: null,
-    pesoArchivos: 0,
-    lecciones: [],
-  };
+  return leerCursoEnEditor(bd, curso.id);
 }
 
-// Responde en cualquier estado: la pantalla de un curso que no se edita necesita su
-// título y su estado (brote_specs, research de F06, punto 7).
 export async function traerCursoEnEditor(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
   const curso = await bd.curso.findUnique({ where: { id: idCurso }, select: { idAutor: true } });
   if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
   return leerCursoEnEditor(bd, idCurso);
 }
 
-// F13: la portada es una imagen de este curso y no es GIF (en el catálogo se moverían
-// muchas a la vez: spec F13, "Aclaraciones").
 async function comprobarPortada(tx: Transaccion, idCurso: string, idPortada: string) {
   const [imagen] = await imagenesDelCurso(tx, idCurso, [idPortada]);
   if (!imagen) {
@@ -240,44 +302,73 @@ async function comprobarPortada(tx: Transaccion, idCurso: string, idPortada: str
   }
 }
 
-// Sin idPortada la portada no cambia; con null se quita. La anterior se borra si nada más
-// del curso la usa. Sin idioma, tampoco cambia (F14), ni sin daInsignia (F08).
 export async function actualizarCurso(
   idAutor: string,
   idCurso: string,
-  { titulo, descripcion, idPortada, idioma, daInsignia }: CuerpoDatosCurso,
+  datos: CuerpoDatosCurso,
 ): Promise<CursoEnEditor> {
   return conCursoEditable(idAutor, idCurso, async (tx) => {
     const antes = await tx.curso.findUniqueOrThrow({
       where: { id: idCurso },
-      select: { idPortada: true },
+      select: {
+        idPortada: true,
+        visibilidad: true,
+        claveEnlace: true,
+        idOrganizacion: true,
+        tambienPublico: true,
+      },
     });
-    if (idPortada) await comprobarPortada(tx, idCurso, idPortada);
+    if (datos.idPortada) await comprobarPortada(tx, idCurso, datos.idPortada);
+
+    const idOrganizacionFinal =
+      datos.idOrganizacion !== undefined ? datos.idOrganizacion : antes.idOrganizacion;
+    if (idOrganizacionFinal && idOrganizacionFinal !== antes.idOrganizacion) {
+      await comprobarPermisoOrganizacion(tx, idAutor, idOrganizacionFinal);
+    }
+
+    const visibilidadFinal = (datos.visibilidad ?? antes.visibilidad) as VisibilidadCurso;
+    if (visibilidadFinal === "organizacion" && !idOrganizacionFinal) {
+      throw new ErrorApi(400, MENSAJES_EDITOR.datosInvalidos, {
+        idOrganizacion: MENSAJES_EDITOR.campoObligatorio,
+      });
+    }
+
+    const claveEnlaceFinal =
+      visibilidadFinal === "enlacePrivado"
+        ? (antes.claveEnlace ?? generarClaveEnlace())
+        : antes.claveEnlace;
+    const tambienPublicoFinal =
+      visibilidadFinal === "organizacion" ? (datos.tambienPublico ?? antes.tambienPublico) : false;
+
     await tx.curso.update({
       where: { id: idCurso },
       data: {
-        titulo,
-        descripcion,
-        ...(idPortada !== undefined && { idPortada }),
-        ...(idioma && { idioma }),
-        ...(daInsignia !== undefined && { daInsignia }),
+        titulo: datos.titulo,
+        descripcion: datos.descripcion,
+        ...(datos.idPortada !== undefined && { idPortada: datos.idPortada }),
+        ...(datos.idioma && { idioma: datos.idioma }),
+        ...(datos.daInsignia !== undefined && { daInsignia: datos.daInsignia }),
+        ...(datos.categoria && { categoria: datos.categoria }),
+        ...(datos.nivel && { nivel: datos.nivel }),
+        ...(datos.etiquetas !== undefined && { etiquetas: datos.etiquetas }),
+        visibilidad: visibilidadFinal,
+        claveEnlace: claveEnlaceFinal,
+        idOrganizacion: idOrganizacionFinal,
+        tambienPublico: tambienPublicoFinal,
+        ...(datos.permiteFork !== undefined && { permiteFork: datos.permiteFork }),
       },
     });
-    if (idPortada !== undefined && antes.idPortada && antes.idPortada !== idPortada) {
+    if (datos.idPortada !== undefined && antes.idPortada && antes.idPortada !== datos.idPortada) {
       await borrarSinUso(tx, idCurso, [antes.idPortada]);
     }
     return leerCursoEnEditor(tx, idCurso);
   });
 }
 
-// Las lecciones y su progreso se borran en cascada. Si el curso estuvo publicado
-// y se retiró, el progreso de sus alumnos se va con él (spec F05, "Supuestos").
 export async function borrarCurso(idAutor: string, idCurso: string): Promise<void> {
   await conCursoEditable(idAutor, idCurso, (tx) => tx.curso.delete({ where: { id: idCurso } }));
 }
 
-// Se cuenta con lo guardado y con el curso bloqueado: nadie puede vaciar una lección
-// entre esta comprobación y el envío.
 async function comprobarContenido(tx: Transaccion, idCurso: string) {
   const lecciones = await tx.$queryRaw<{ vacia: boolean }[]>`
     SELECT jsonb_array_length(actividades) = 0 AS vacia FROM leccion WHERE id_curso = ${idCurso}
@@ -290,8 +381,6 @@ async function comprobarContenido(tx: Transaccion, idCurso: string) {
   }
 }
 
-// `update` pone `actualizado_en` con @updatedAt, y eso sube el curso en "Cursos que
-// creé". Las actividades no se revisan: solo se guardan después de validarlas.
 export async function enviarARevision(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
   return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
     if (estado !== "borrador") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
@@ -299,6 +388,39 @@ export async function enviarARevision(idAutor: string, idCurso: string): Promise
     await tx.curso.update({
       where: { id: idCurso },
       data: { revision: "pendiente", motivoRechazo: null },
+    });
+    return leerCursoEnEditor(tx, idCurso);
+  });
+}
+
+// F16: publicación directa sin cola global para enlace privado u organizaciones que la permiten.
+export async function publicarDirecto(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
+  return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
+    if (estado !== "borrador") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
+    const curso = await tx.curso.findUniqueOrThrow({
+      where: { id: idCurso },
+      select: { visibilidad: true, idOrganizacion: true, claveEnlace: true },
+    });
+    const permitido = await calcularPuedePublicarDirecto(
+      tx,
+      idAutor,
+      curso.visibilidad,
+      curso.idOrganizacion,
+    );
+    if (!permitido) {
+      throw new ErrorApi(403, MENSAJES_EDITOR.noPuedePublicarDirecto);
+    }
+    await comprobarContenido(tx, idCurso);
+    await tx.curso.update({
+      where: { id: idCurso },
+      data: {
+        publicado: true,
+        revision: null,
+        motivoRechazo: null,
+        ...(curso.visibilidad === "enlacePrivado" && !curso.claveEnlace
+          ? { claveEnlace: generarClaveEnlace() }
+          : {}),
+      },
     });
     return leerCursoEnEditor(tx, idCurso);
   });
@@ -312,7 +434,6 @@ export async function retirarDeRevision(idAutor: string, idCurso: string): Promi
   });
 }
 
-// El progreso de los alumnos se queda: vuelve a contar al publicarse otra vez (F04).
 export async function retirarDelCatalogo(idAutor: string, idCurso: string): Promise<CursoEnEditor> {
   return conCursoDelAutor(idAutor, idCurso, MENSAJES_EDITOR.cursoNoExiste, async (tx, estado) => {
     if (estado !== "publicado") throw new ErrorApi(409, MENSAJES_EDITOR.estadoCambiado);
@@ -324,17 +445,16 @@ export async function retirarDelCatalogo(idAutor: string, idCurso: string): Prom
 export async function crearLeccion(
   idAutor: string,
   idCurso: string,
-  { titulo }: CuerpoNuevaLeccion,
+  { titulo, modulo }: CuerpoNuevaLeccion,
 ): Promise<LeccionEnMapa> {
   return conCursoEditable(idAutor, idCurso, async (tx) => {
     const cantidad = await tx.leccion.count({ where: { idCurso } });
     if (cantidad >= LIMITES_CURSO.leccionesMax) {
       throw new ErrorApi(400, MENSAJES_EDITOR.maxLecciones);
     }
-    // las posiciones no tienen huecos: la siguiente es la cantidad más uno
     const leccion = await tx.leccion.create({
-      data: { idCurso, titulo, posicion: cantidad + 1 },
-      select: { id: true, titulo: true, posicion: true },
+      data: { idCurso, titulo, modulo: modulo ?? null, posicion: cantidad + 1 },
+      select: { id: true, titulo: true, modulo: true, posicion: true },
     });
     await tocarCurso(tx, idCurso);
     return { ...leccion, cantidadActividades: 0 };
@@ -388,7 +508,6 @@ export async function borrarLeccion(
       idCurso,
       quedan.map(({ id }) => id),
     );
-    // F13 y F14: sus imágenes y sus audios, si nada más del curso los usa
     await borrarSinUso(tx, idCurso, leccion.imagenes);
     await borrarAudiosSinUso(tx, idCurso, leccion.audios);
     await tocarCurso(tx, idCurso);
@@ -398,10 +517,11 @@ export async function borrarLeccion(
 const seleccionLeccion = {
   id: true,
   titulo: true,
+  modulo: true,
   posicion: true,
   actividades: true,
   version: true,
-  curso: { select: { idioma: true } }, // F14
+  curso: { select: { idioma: true } },
 } satisfies Prisma.LeccionSelect;
 
 type FilaLeccion = Prisma.LeccionGetPayload<{ select: typeof seleccionLeccion }>;
@@ -409,9 +529,7 @@ type FilaLeccion = Prisma.LeccionGetPayload<{ select: typeof seleccionLeccion }>
 function aLeccionEnEditor({ curso, ...leccion }: FilaLeccion): LeccionEnEditor {
   return {
     ...leccion,
-    // la columna solo se escribe después de validarActividades
     actividades: leccion.actividades as unknown as Actividad[],
-    // el de su curso: la vista previa lee las frases con su voz (F14)
     idioma: curso.idioma as IdiomaCurso,
   };
 }
@@ -430,10 +548,6 @@ export async function traerLeccionEnEditor(
   return aLeccionEnEditor(leccion);
 }
 
-// F13: cada imagen de las actividades tiene que ser de este curso; si alguna no lo es (se
-// borró o es de otro curso), el 400 dice la primera actividad que la usa y cada id que falta,
-// para que el editor marque sus campos. Devuelve las actividades con los datos de la base en
-// cada imagen (el cliente no puede mentir el peso) y lo que pesan sus imágenes, sin repetir.
 async function conImagenesDelCurso(
   tx: Transaccion,
   idCurso: string,
@@ -464,8 +578,6 @@ async function conImagenesDelCurso(
   };
 }
 
-// F14: lo mismo con los audios. Cada uno, de este curso, y con su formato, su duración y su
-// peso de la base.
 async function conAudiosDelCurso(
   tx: Transaccion,
   idCurso: string,
@@ -493,15 +605,11 @@ async function conAudiosDelCurso(
   };
 }
 
-// Reemplaza el título y todas las actividades. Con otra `version`, otra pestaña
-// guardó antes: no se pisa nada salvo que el autor lo pida con `reemplazar`. Sus imágenes y
-// audios pesan, entre todos y sin repetir, hasta 25 MB. Los que tenía y ya no tiene se
-// borran si nada más del curso los usa (F13, F14).
 export async function guardarLeccion(
   idAutor: string,
   idCurso: string,
   idLeccion: string,
-  { titulo, actividades, version, reemplazar }: CuerpoGuardarLeccion,
+  { titulo, modulo, actividades, version, reemplazar }: CuerpoGuardarLeccion,
 ): Promise<LeccionEnEditor> {
   return conCursoEditable(idAutor, idCurso, async (tx) => {
     const actual = await tx.leccion.findFirst({
@@ -523,6 +631,7 @@ export async function guardarLeccion(
       where: { id: idLeccion },
       data: {
         titulo,
+        ...(modulo !== undefined && { modulo }),
         actividades: conAudios.actividades as unknown as Prisma.InputJsonValue,
         imagenes: idsImagenes,
         audios: idsAudios,
@@ -542,5 +651,260 @@ export async function guardarLeccion(
     );
     await tocarCurso(tx, idCurso);
     return aLeccionEnEditor(leccion);
+  });
+}
+
+// F16: bifurcar (fork) un curso publicado en un borrador nuevo con atribución y copia
+// independiente de lecciones, imágenes y audios.
+export async function bifurcarCurso(
+  idUsuario: string,
+  idCursoOrigen: string,
+  cuerpo: CuerpoForkCurso,
+): Promise<CursoEnEditor> {
+  const origen = await bd.curso.findUnique({
+    where: { id: idCursoOrigen },
+    select: {
+      id: true,
+      titulo: true,
+      descripcion: true,
+      publicado: true,
+      visibilidad: true,
+      claveEnlace: true,
+      idAutor: true,
+      idOrganizacion: true,
+      tambienPublico: true,
+      permiteFork: true,
+      idioma: true,
+      categoria: true,
+      nivel: true,
+      etiquetas: true,
+      daInsignia: true,
+      idPortada: true,
+      organizacion: { select: { modoAcceso: true } },
+      imagenes: {
+        select: {
+          id: true,
+          huella: true,
+          formato: true,
+          ancho: true,
+          alto: true,
+          peso: true,
+          datos: true,
+        },
+      },
+      audios: {
+        select: { id: true, huella: true, formato: true, duracion: true, peso: true, datos: true },
+      },
+      lecciones: {
+        orderBy: { posicion: "asc" },
+        select: { titulo: true, modulo: true, posicion: true, actividades: true },
+      },
+    },
+  });
+
+  if (!origen || !(await puedeVerCursoPublicado(origen, idUsuario))) {
+    throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
+  }
+  if (!origen.permiteFork) {
+    throw new ErrorApi(403, MENSAJES_EDITOR.noPermiteFork);
+  }
+
+  const idOrganizacionDestino = cuerpo.idOrganizacion ?? null;
+  if (idOrganizacionDestino) {
+    await comprobarPermisoOrganizacion(bd, idUsuario, idOrganizacionDestino);
+  }
+
+  const tituloNuevo = recortarUnicode(
+    cuerpo.titulo ?? `${origen.titulo} (adaptación)`,
+    LIMITES_CURSO.tituloMax,
+  );
+
+  return bd.$transaction(async (tx) => {
+    const nuevo = await tx.curso.create({
+      data: {
+        titulo: tituloNuevo,
+        descripcion: origen.descripcion,
+        idAutor: idUsuario,
+        idioma: origen.idioma,
+        categoria: origen.categoria,
+        nivel: origen.nivel,
+        etiquetas: origen.etiquetas,
+        daInsignia: origen.daInsignia,
+        visibilidad: idOrganizacionDestino ? "organizacion" : "publico",
+        idOrganizacion: idOrganizacionDestino,
+        tambienPublico: false,
+        permiteFork: true,
+        idCursoOrigen: origen.id,
+      },
+      select: { id: true },
+    });
+
+    const mapaImagenes = new Map<string, string>();
+    for (const img of origen.imagenes) {
+      const copia = await tx.imagen.create({
+        data: {
+          idCurso: nuevo.id,
+          huella: img.huella,
+          formato: img.formato,
+          ancho: img.ancho,
+          alto: img.alto,
+          peso: img.peso,
+          datos: new Uint8Array(img.datos),
+        },
+        select: { id: true },
+      });
+      mapaImagenes.set(img.id, copia.id);
+    }
+
+    const mapaAudios = new Map<string, string>();
+    for (const aud of origen.audios) {
+      const copia = await tx.audio.create({
+        data: {
+          idCurso: nuevo.id,
+          huella: aud.huella,
+          formato: aud.formato,
+          duracion: aud.duracion,
+          peso: aud.peso,
+          datos: new Uint8Array(aud.datos),
+        },
+        select: { id: true },
+      });
+      mapaAudios.set(aud.id, copia.id);
+    }
+
+    if (origen.idPortada && mapaImagenes.has(origen.idPortada)) {
+      await tx.curso.update({
+        where: { id: nuevo.id },
+        data: { idPortada: mapaImagenes.get(origen.idPortada)! },
+      });
+    }
+
+    for (const lec of origen.lecciones) {
+      const actividadesOriginales = lec.actividades as unknown as Actividad[];
+      const actividadesRemapeadas = actividadesOriginales.map((act) => {
+        const conImg = mapearImagenes(act, (img) => ({
+          ...img,
+          id: mapaImagenes.get(img.id) ?? img.id,
+        }));
+        return mapearAudios(conImg, (aud) => ({
+          ...aud,
+          id: mapaAudios.get(aud.id) ?? aud.id,
+        }));
+      });
+      await tx.leccion.create({
+        data: {
+          idCurso: nuevo.id,
+          titulo: lec.titulo,
+          modulo: lec.modulo,
+          posicion: lec.posicion,
+          actividades: actividadesRemapeadas as unknown as Prisma.InputJsonValue,
+          imagenes: idsDeImagenes(actividadesRemapeadas),
+          audios: idsDeAudios(actividadesRemapeadas),
+        },
+      });
+    }
+
+    return leerCursoEnEditor(tx, nuevo.id);
+  });
+}
+
+function limpiarMediosParaExportar(actividad: Actividad): Actividad {
+  if (actividad.tipo === "teoria" && actividad.imagenes) {
+    const copia = { ...actividad };
+    delete copia.imagenes;
+    return {
+      ...copia,
+      texto:
+        copia.texto
+          .split(MARCA_IMAGEN)
+          .join("")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim() || copia.texto,
+    };
+  }
+  if (actividad.tipo === "opcionMultiple" && actividad.imagen) {
+    const copia = { ...actividad };
+    delete copia.imagen;
+    return copia;
+  }
+  if (actividad.tipo === "escucharRepetir" && actividad.audio) {
+    const copia = { ...actividad };
+    delete copia.audio;
+    return copia;
+  }
+  return actividad;
+}
+
+// F07 / F16: exportar un curso del autor como JSON portable.
+export async function exportarCurso(idAutor: string, idCurso: string): Promise<CursoExportado> {
+  const curso = await bd.curso.findUnique({
+    where: { id: idCurso },
+    select: {
+      idAutor: true,
+      titulo: true,
+      descripcion: true,
+      idioma: true,
+      categoria: true,
+      nivel: true,
+      etiquetas: true,
+      daInsignia: true,
+      permiteFork: true,
+      lecciones: {
+        orderBy: { posicion: "asc" },
+        select: { titulo: true, modulo: true, actividades: true },
+      },
+    },
+  });
+  if (curso?.idAutor !== idAutor) throw new ErrorApi(404, MENSAJES_CATALOGO.cursoNoDisponible);
+  return {
+    formato: "brote-curso-v1",
+    titulo: curso.titulo,
+    descripcion: curso.descripcion,
+    idioma: curso.idioma as IdiomaCurso,
+    categoria: curso.categoria as CategoriaCurso,
+    nivel: curso.nivel as NivelCurso,
+    etiquetas: curso.etiquetas,
+    daInsignia: curso.daInsignia,
+    permiteFork: curso.permiteFork,
+    lecciones: curso.lecciones.map((l) => ({
+      titulo: l.titulo,
+      modulo: l.modulo,
+      actividades: (l.actividades as unknown as Actividad[]).map(limpiarMediosParaExportar),
+    })),
+  };
+}
+
+// F07 / F16: importar un JSON portable como borrador nuevo del autor.
+export async function importarCurso(
+  idAutor: string,
+  datos: CursoExportado,
+): Promise<CursoEnEditor> {
+  return bd.$transaction(async (tx) => {
+    const curso = await tx.curso.create({
+      data: {
+        titulo: datos.titulo,
+        descripcion: datos.descripcion,
+        idAutor,
+        idioma: datos.idioma,
+        categoria: datos.categoria,
+        nivel: datos.nivel,
+        etiquetas: datos.etiquetas,
+        daInsignia: datos.daInsignia,
+        permiteFork: datos.permiteFork,
+      },
+      select: { id: true },
+    });
+    for (const [i, lec] of datos.lecciones.entries()) {
+      await tx.leccion.create({
+        data: {
+          idCurso: curso.id,
+          titulo: lec.titulo,
+          modulo: lec.modulo,
+          posicion: i + 1,
+          actividades: lec.actividades as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+    return leerCursoEnEditor(tx, curso.id);
   });
 }

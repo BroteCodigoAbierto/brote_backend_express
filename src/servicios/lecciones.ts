@@ -2,21 +2,37 @@ import { bd } from "../config/bd.ts";
 import type { Prisma } from "../generado/prisma/client.ts";
 import { ErrorApi } from "../middleware/errores.ts";
 import {
+  MENSAJES_CUENTA,
   MENSAJES_LECCION,
   type Actividad,
   type DetalleLeccion,
   type IdiomaCurso,
 } from "../tipos/contrato.ts";
+import { puedeVerCursoPublicado } from "./cursos.ts";
 
-// Una lección para cursarla (spec F03). Solo sale si su curso está publicado y
-// es el de la dirección; en cualquier otro caso, el mismo 404.
+// Una lección para cursarla (spec F03 + decisión 0020).
+// Soporta visitantes sin cuenta para la lección de muestra (posición 1) y respeta
+// permisos de organización y enlace privado.
 
 const seleccionLeccion = {
   id: true,
   titulo: true,
+  modulo: true,
   posicion: true,
   actividades: true,
-  curso: { select: { idioma: true } }, // F14
+  curso: {
+    select: {
+      id: true,
+      idioma: true,
+      publicado: true,
+      visibilidad: true,
+      claveEnlace: true,
+      idAutor: true,
+      idOrganizacion: true,
+      tambienPublico: true,
+      organizacion: { select: { modoAcceso: true } },
+    },
+  },
 } satisfies Prisma.LeccionSelect;
 
 type LeccionConActividades = Prisma.LeccionGetPayload<{ select: typeof seleccionLeccion }>;
@@ -25,31 +41,33 @@ function aDetalleLeccion(leccion: LeccionConActividades): DetalleLeccion {
   return {
     id: leccion.id,
     titulo: leccion.titulo,
+    modulo: leccion.modulo,
     posicion: leccion.posicion,
-    // la columna solo se escribe después de validarActividades
     actividades: leccion.actividades as unknown as Actividad[],
-    // el de su curso: la voz lee las frases en ese idioma (F14)
     idioma: leccion.curso.idioma as IdiomaCurso,
   };
 }
 
-// Una lección que se puede abrir: existe, es de ese curso y el curso está
-// publicado. La usan abrirla (F03) y registrar su progreso (F04), para que las
-// dos reglas no se separen.
 export function dondeLeccionPublicada(idCurso: string, idLeccion: string) {
   return { id: idLeccion, idCurso, curso: { publicado: true } } satisfies Prisma.LeccionWhereInput;
 }
 
-// Mismo mensaje si la lección no existe, es de otro curso o su curso no está
-// publicado, para no revelar cursos en borrador (spec F03, "Casos de error").
 export async function traerLeccionPublicada(
   idCurso: string,
   idLeccion: string,
+  idUsuario: string | null = null,
+  claveEnlace?: string | null,
 ): Promise<DetalleLeccion> {
   const leccion = await bd.leccion.findFirst({
-    where: dondeLeccionPublicada(idCurso, idLeccion),
+    where: { id: idLeccion, idCurso },
     select: seleccionLeccion,
   });
-  if (!leccion) throw new ErrorApi(404, MENSAJES_LECCION.leccionNoDisponible);
+  if (!leccion || !(await puedeVerCursoPublicado(leccion.curso, idUsuario, claveEnlace))) {
+    throw new ErrorApi(404, MENSAJES_LECCION.leccionNoDisponible);
+  }
+  // Un visitante sin cuenta puede probar la primera lección como muestra abierta.
+  if (!idUsuario && leccion.posicion > 1) {
+    throw new ErrorApi(401, MENSAJES_CUENTA.sesionTerminada);
+  }
   return aDetalleLeccion(leccion);
 }

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { esAdministrador, requerirSesion, usuarioDe } from "../middleware/sesion.ts";
+import { esAdministrador, sesionOpcional, usuarioOpcionalDe } from "../middleware/sesion.ts";
 import { traerImagen } from "../servicios/imagenes.ts";
 import { TIPO_MIME_IMAGEN } from "../tipos/contrato.ts";
 
@@ -8,12 +8,14 @@ import { TIPO_MIME_IMAGEN } from "../tipos/contrato.ts";
 // nosniff y esa CSP, un archivo raro nunca se abre como página (research de F13, punto 3).
 export const rutasImagenes = Router();
 
-rutasImagenes.get<{ idImagen: string }>("/:idImagen", requerirSesion, async (req, res) => {
-  const usuario = usuarioDe(res);
+rutasImagenes.get<{ idImagen: string }>("/:idImagen", sesionOpcional, async (req, res) => {
+  const usuario = usuarioOpcionalDe(res);
+  const clave = typeof req.query.clave === "string" ? req.query.clave : null;
   const { datos, formato, huella } = await traerImagen(
-    usuario.id,
+    usuario?.id ?? null,
     req.params.idImagen,
-    esAdministrador(usuario),
+    usuario ? esAdministrador(usuario) : false,
+    clave,
   );
   res.set({
     "Content-Type": TIPO_MIME_IMAGEN[formato],

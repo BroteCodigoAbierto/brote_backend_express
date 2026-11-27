@@ -1,6 +1,8 @@
 // Variables de entorno que usa la API. Se leen una sola vez al arrancar para
 // que un valor faltante truene de inmediato y no a la mitad de una petición.
 
+import { MODOS_INSTANCIA, type ModoInstancia } from "../tipos/contrato.ts";
+
 function leer(nombre: string, porDefecto?: string): string {
   const valor = process.env[nombre] ?? porDefecto;
   if (valor === undefined || valor === "") {
@@ -29,6 +31,14 @@ function leerCorreos(nombre: string): string[] {
     .filter(Boolean);
 }
 
+function leerModoInstancia(): ModoInstancia {
+  const valor = (process.env.MODO_INSTANCIA ?? "comunidad").trim();
+  if ((MODOS_INSTANCIA as readonly string[]).includes(valor)) {
+    return valor as ModoInstancia;
+  }
+  return "comunidad";
+}
+
 export const entorno = {
   puerto,
   // orígenes que pueden llamar a la API desde el navegador, separados por coma
@@ -39,4 +49,8 @@ export const entorno = {
   urlApi: leer("URL_API", `http://localhost:${puerto}`),
   // correos de quienes aprueban cursos desde "Mi panel", separados por coma
   correosAdministradores: leerCorreos("CORREOS_ADMINISTRADORES"),
+  // F16 (decisión 0020): modo de instancia (comunidad u organización self-hosted)
+  modoInstancia: leerModoInstancia(),
+  nombreInstancia: (process.env.NOMBRE_INSTANCIA ?? "Brote").trim() || "Brote",
+  slugOrganizacionFija: (process.env.ORGANIZACION_INSTANCIA ?? "").trim() || null,
 };

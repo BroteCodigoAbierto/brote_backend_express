@@ -11,6 +11,7 @@ import {
 } from "../tipos/contrato.ts";
 import type { ImagenSubida } from "../validacion/imagenes.ts";
 import { limpiarArchivosSinUsar, pesoArchivosCurso } from "./archivos.ts";
+import { puedeVerCursoPublicado } from "./cursos.ts";
 import { conCursoEditable } from "./editor.ts";
 
 // Las imágenes de los cursos (spec F13; brote_specs, research de F13, puntos 1 y 6). Los
@@ -108,23 +109,54 @@ export async function subirImagen(
   });
 }
 
-type CursoDelArchivo = { publicado: boolean; idAutor: string; revision: string | null };
+type CursoDelArchivo = {
+  id: string;
+  publicado: boolean;
+  idAutor: string;
+  revision: string | null;
+  visibilidad: string;
+  claveEnlace: string | null;
+  idOrganizacion: string | null;
+  tambienPublico: boolean;
+  organizacion: { modoAcceso: string } | null;
+};
 
-function seVeElCurso(curso: CursoDelArchivo, idUsuario: string, esAdministrador: boolean) {
-  if (curso.publicado || curso.idAutor === idUsuario) return true;
-  return esAdministrador && curso.revision === "pendiente";
+async function seVeElCurso(
+  curso: CursoDelArchivo,
+  idUsuario: string | null,
+  esAdministrador: boolean,
+  claveEnlace?: string | null,
+): Promise<boolean> {
+  if (idUsuario && curso.idAutor === idUsuario) return true;
+  if (curso.publicado) {
+    if (curso.visibilidad === "enlacePrivado") return true;
+    return puedeVerCursoPublicado(curso, idUsuario, claveEnlace);
+  }
+  if (curso.revision === "pendiente") {
+    if (esAdministrador) return true;
+    if (idUsuario && curso.idOrganizacion) {
+      const miembro = await bd.miembroOrganizacion.findUnique({
+        where: {
+          idOrganizacion_idUsuario: { idOrganizacion: curso.idOrganizacion, idUsuario },
+        },
+        select: { rol: true },
+      });
+      return miembro?.rol === "dueno" || miembro?.rol === "admin";
+    }
+  }
+  return false;
 }
 
 export type ArchivoImagen = { datos: Buffer; formato: FormatoImagen; huella: string };
 
 // Una imagen se ve donde se ve su curso: la de un borrador o un curso en revisión, solo su
-// autor; la de un curso publicado, cualquiera con sesión. Si no, el mismo 404 que si no
-// existe, para no revelar cursos sin publicar. Decisión 0018: la de un curso en revisión,
-// también un administrador, que lo prueba antes de aprobarlo.
+// autor (o moderadores globales/de organización en revisión); la de un curso publicado,
+// cualquiera con acceso al curso (incluidos visitantes en cursos públicos).
 export async function traerImagen(
-  idUsuario: string,
+  idUsuario: string | null,
   idImagen: string,
   esAdministrador: boolean,
+  claveEnlace?: string | null,
 ): Promise<ArchivoImagen> {
   const imagen = await bd.imagen.findUnique({
     where: { id: idImagen },
@@ -132,10 +164,22 @@ export async function traerImagen(
       datos: true,
       formato: true,
       huella: true,
-      curso: { select: { publicado: true, idAutor: true, revision: true } },
+      curso: {
+        select: {
+          id: true,
+          publicado: true,
+          idAutor: true,
+          revision: true,
+          visibilidad: true,
+          claveEnlace: true,
+          idOrganizacion: true,
+          tambienPublico: true,
+          organizacion: { select: { modoAcceso: true } },
+        },
+      },
     },
   });
-  if (!imagen || !seVeElCurso(imagen.curso, idUsuario, esAdministrador)) {
+  if (!imagen || !(await seVeElCurso(imagen.curso, idUsuario, esAdministrador, claveEnlace))) {
     throw new ErrorApi(404, MENSAJES_IMAGENES.imagenNoDisponible);
   }
   return {

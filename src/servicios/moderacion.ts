@@ -9,8 +9,8 @@ import {
   type IdiomaCurso,
 } from "../tipos/contrato.ts";
 
-// Moderación (decisión 0018): lo que un administrador ve y hace desde "Mi panel". La
-// ruta ya comprobó que quien llama es administrador.
+// Moderación (decisiones 0018 y 0020): soporta moderación global (administradores
+// de la instancia) y moderación delegada por organización (dueno/admin de un silo).
 
 const EN_REVISION = { publicado: false, revision: "pendiente" } satisfies Prisma.CursoWhereInput;
 
@@ -21,12 +21,12 @@ const seleccionCurso = {
   idPortada: true,
   actualizadoEn: true,
   autor: { select: { name: true } },
+  organizacion: { select: { id: true, slug: true, nombre: true, colorMarca: true } },
   _count: { select: { lecciones: true } },
 } satisfies Prisma.CursoSelect;
 
 type CursoSeleccionado = Prisma.CursoGetPayload<{ select: typeof seleccionCurso }>;
 
-// Un curso en revisión no se edita, así que `actualizadoEn` es cuándo se envió.
 function aCursoEnRevision(curso: CursoSeleccionado): CursoEnRevision {
   return {
     id: curso.id,
@@ -36,10 +36,10 @@ function aCursoEnRevision(curso: CursoSeleccionado): CursoEnRevision {
     cantidadLecciones: curso._count.lecciones,
     idPortada: curso.idPortada,
     enviadoEn: curso.actualizadoEn.toISOString(),
+    organizacion: curso.organizacion,
   };
 }
 
-// 404 si el curso no existe; 409 si existe pero ya no está en revisión.
 async function errorCursoNoEnRevision(idCurso: string): Promise<ErrorApi> {
   const existe = await bd.curso.count({ where: { id: idCurso } });
   return existe
@@ -47,18 +47,63 @@ async function errorCursoNoEnRevision(idCurso: string): Promise<ErrorApi> {
     : new ErrorApi(404, MENSAJES_MODERACION.cursoNoExiste);
 }
 
-// Los cursos que esperan decisión, del enviado hace más tiempo al más reciente.
-export async function traerCursosEnRevision(): Promise<CursoEnRevision[]> {
+// Organizaciones donde el usuario tiene rol de administración ("dueno" o "admin").
+export async function idsOrganizacionesAdministradas(idUsuario: string): Promise<string[]> {
+  const filas = await bd.miembroOrganizacion.findMany({
+    where: { idUsuario, rol: { in: ["dueno", "admin"] } },
+    select: { idOrganizacion: true },
+  });
+  return filas.map((f) => f.idOrganizacion);
+}
+
+// Los cursos que esperan decisión: globales si es admin de instancia, más los de
+// organizaciones que el usuario administra.
+export async function traerCursosEnRevision(
+  esAdminGlobal: boolean,
+  idUsuario: string,
+): Promise<CursoEnRevision[]> {
+  const idsOrg = await idsOrganizacionesAdministradas(idUsuario);
+  if (!esAdminGlobal && idsOrg.length === 0) return [];
+  const filtroAlcance: Prisma.CursoWhereInput = esAdminGlobal
+    ? EN_REVISION
+    : { ...EN_REVISION, idOrganizacion: { in: idsOrg } };
   const cursos = await bd.curso.findMany({
-    where: EN_REVISION,
+    where: filtroAlcance,
     orderBy: [{ actualizadoEn: "asc" }, { id: "asc" }],
     select: seleccionCurso,
   });
   return cursos.map(aCursoEnRevision);
 }
 
-// Todo el curso, con las actividades de cada lección, para probarlo antes de decidir.
-export async function traerCursoEnModeracion(idCurso: string): Promise<CursoEnModeracion> {
+async function comprobarPermisoSobreCurso(
+  idCurso: string,
+  esAdminGlobal: boolean,
+  idUsuario: string,
+) {
+  if (esAdminGlobal) return;
+  const curso = await bd.curso.findUnique({
+    where: { id: idCurso },
+    select: { idOrganizacion: true },
+  });
+  if (!curso) throw new ErrorApi(404, MENSAJES_MODERACION.cursoNoExiste);
+  if (!curso.idOrganizacion) throw new ErrorApi(403, MENSAJES_MODERACION.soloAdministradores);
+  const miembro = await bd.miembroOrganizacion.findUnique({
+    where: {
+      idOrganizacion_idUsuario: { idOrganizacion: curso.idOrganizacion, idUsuario },
+    },
+    select: { rol: true },
+  });
+  if (!miembro || (miembro.rol !== "dueno" && miembro.rol !== "admin")) {
+    throw new ErrorApi(403, MENSAJES_MODERACION.soloAdministradores);
+  }
+}
+
+export async function traerCursoEnModeracion(
+  idCurso: string,
+  esAdminGlobal: boolean,
+  idUsuario: string,
+): Promise<CursoEnModeracion> {
+  await comprobarPermisoSobreCurso(idCurso, esAdminGlobal, idUsuario);
   const curso = await bd.curso.findFirst({
     where: { id: idCurso, ...EN_REVISION },
     select: {
@@ -67,7 +112,7 @@ export async function traerCursoEnModeracion(idCurso: string): Promise<CursoEnMo
       daInsignia: true,
       lecciones: {
         orderBy: { posicion: "asc" },
-        select: { id: true, titulo: true, posicion: true, actividades: true },
+        select: { id: true, titulo: true, modulo: true, posicion: true, actividades: true },
       },
     },
   });
@@ -80,18 +125,20 @@ export async function traerCursoEnModeracion(idCurso: string): Promise<CursoEnMo
     lecciones: curso.lecciones.map((leccion) => ({
       id: leccion.id,
       titulo: leccion.titulo,
+      modulo: leccion.modulo,
       posicion: leccion.posicion,
-      // la columna solo se escribe después de validarActividades
       actividades: leccion.actividades as unknown as Actividad[],
       idioma,
     })),
   };
 }
 
-// Publica el curso si sigue en revisión. El trigger de F06 limpia `revision` al cambiar
-// `publicado`, igual que cuando se aprobaba directo en la base. La condición va en el
-// mismo UPDATE para que un autor que lo retira al mismo tiempo no termine publicado.
-export async function aprobarCurso(idCurso: string): Promise<void> {
+export async function aprobarCurso(
+  idCurso: string,
+  esAdminGlobal: boolean,
+  idUsuario: string,
+): Promise<void> {
+  await comprobarPermisoSobreCurso(idCurso, esAdminGlobal, idUsuario);
   const { count } = await bd.curso.updateMany({
     where: { id: idCurso, ...EN_REVISION },
     data: { publicado: true },
@@ -99,9 +146,13 @@ export async function aprobarCurso(idCurso: string): Promise<void> {
   if (count !== 1) throw await errorCursoNoEnRevision(idCurso);
 }
 
-// No lo publica: vuelve a borrador con "Revisión no aprobada" y el motivo, si hay, que su
-// autor ve en el mapa del curso (F06). Es lo mismo que rechazarlo en la base.
-export async function rechazarCurso(idCurso: string, motivo: string | null): Promise<void> {
+export async function rechazarCurso(
+  idCurso: string,
+  motivo: string | null,
+  esAdminGlobal: boolean,
+  idUsuario: string,
+): Promise<void> {
+  await comprobarPermisoSobreCurso(idCurso, esAdminGlobal, idUsuario);
   const { count } = await bd.curso.updateMany({
     where: { id: idCurso, ...EN_REVISION },
     data: { revision: "rechazada", motivoRechazo: motivo },
