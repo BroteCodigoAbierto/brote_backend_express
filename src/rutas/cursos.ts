@@ -1,8 +1,18 @@
 import { Router } from "express";
-import { requerirSesion, usuarioDe } from "../middleware/sesion.ts";
-import { traerCatalogo, traerCursoPublicado } from "../servicios/cursos.ts";
+import {
+  requerirSesion,
+  sesionOpcional,
+  usuarioDe,
+  usuarioOpcionalDe,
+} from "../middleware/sesion.ts";
+import {
+  traerCatalogo,
+  traerCursoPorEnlace,
+  traerCursoPublicado,
+} from "../servicios/cursos.ts";
 import { traerLeccionPublicada } from "../servicios/lecciones.ts";
 import { registrarProgreso } from "../servicios/progreso.ts";
+import { crearReporteActividad } from "../servicios/reportes.ts";
 import type {
   RespuestaCatalogo,
   RespuestaCurso,
@@ -11,52 +21,62 @@ import type {
 } from "../tipos/contrato.ts";
 import { validarConsultaCatalogo } from "../validacion/catalogo.ts";
 import { validarCuerpoProgreso } from "../validacion/progreso.ts";
+import { validarReporteActividad } from "../validacion/reportes.ts";
 
 export const rutasCursos = Router();
 
-// La sesión va antes que la validación: sin sesión es 401 aunque los
-// parámetros estén mal.
-
-// Catálogo y búsqueda, de 10 en 10 (spec F02), sin los cursos que quien llama ya completó.
-rutasCursos.get("/", requerirSesion, async (req, res) => {
+// Catálogo y búsqueda (spec F02 + decisión 0020): accesible también sin sesión para
+// visitantes en cursos públicos u organizaciones abiertas.
+rutasCursos.get("/", sesionOpcional, async (req, res) => {
   const consulta = validarConsultaCatalogo(req.query);
-  const respuesta: RespuestaCatalogo = await traerCatalogo(consulta, usuarioDe(res).id);
+  const usuario = usuarioOpcionalDe(res);
+  const respuesta: RespuestaCatalogo = await traerCatalogo(consulta, usuario?.id ?? null);
   res.json(respuesta);
 });
 
-// Detalle de un curso publicado con sus lecciones y, desde F04, el progreso
-// de quien pregunta en cada una.
-rutasCursos.get<{ idCurso: string }>("/:idCurso", requerirSesion, async (req, res) => {
+// Acceso directo a un curso publicado con visibilidad "enlacePrivado".
+rutasCursos.get<{ clave: string }>("/enlace/:clave", sesionOpcional, async (req, res) => {
+  const usuario = usuarioOpcionalDe(res);
   const respuesta: RespuestaCurso = {
-    curso: await traerCursoPublicado(req.params.idCurso, usuarioDe(res).id),
+    curso: await traerCursoPorEnlace(req.params.clave, usuario?.id ?? null),
   };
   res.json(respuesta);
 });
 
-// Una lección para cursarla, con sus actividades (spec F03). Los
-// identificadores no se validan: uno que no existe es un 404 como cualquier otro.
+// Detalle de un curso publicado con sus lecciones y, si hay sesión, el progreso
+// de quien pregunta en cada una.
+rutasCursos.get<{ idCurso: string }>("/:idCurso", sesionOpcional, async (req, res) => {
+  const usuario = usuarioOpcionalDe(res);
+  const clave = typeof req.query.clave === "string" ? req.query.clave : null;
+  const respuesta: RespuestaCurso = {
+    curso: await traerCursoPublicado(req.params.idCurso, usuario?.id ?? null, clave),
+  };
+  res.json(respuesta);
+});
+
+// Una lección para cursarla, con sus actividades (spec F03). Sin sesión solo se
+// permite la primera lección como muestra abierta (decisión 0020).
 rutasCursos.get<{ idCurso: string; idLeccion: string }>(
   "/:idCurso/lecciones/:idLeccion",
-  requerirSesion,
+  sesionOpcional,
   async (req, res) => {
     const { idCurso, idLeccion } = req.params;
+    const usuario = usuarioOpcionalDe(res);
+    const clave = typeof req.query.clave === "string" ? req.query.clave : null;
     const respuesta: RespuestaLeccion = {
-      leccion: await traerLeccionPublicada(idCurso, idLeccion),
+      leccion: await traerLeccionPublicada(idCurso, idLeccion, usuario?.id ?? null, clave),
     };
     res.json(respuesta);
   },
 );
 
-// Registra (o reemplaza) el resultado de quien llama al completar una lección
-// (spec F04). El alumno sale siempre de la sesión. Orden: sesión (401), forma
-// del cuerpo (400), lección (404) y coherencia con la lección (400).
+// Registra (o reemplaza) el resultado de quien llama al completar una lección (spec F04).
 rutasCursos.put<{ idCurso: string; idLeccion: string }>(
   "/:idCurso/lecciones/:idLeccion/progreso",
   requerirSesion,
   async (req, res) => {
     const { idCurso, idLeccion } = req.params;
     const cuerpo = validarCuerpoProgreso(req.body);
-    // F08: con la insignia que haya completado esta lección (o null)
     const respuesta: RespuestaProgresoLeccion = await registrarProgreso(
       usuarioDe(res).id,
       idCurso,
@@ -64,5 +84,17 @@ rutasCursos.put<{ idCurso: string; idLeccion: string }>(
       cuerpo,
     );
     res.json(respuesta);
+  },
+);
+
+// Reporta un error en una actividad específica para que el autor lo vea en Estudio (F16).
+rutasCursos.post<{ idCurso: string; idLeccion: string }>(
+  "/:idCurso/lecciones/:idLeccion/reportes",
+  requerirSesion,
+  async (req, res) => {
+    const { idCurso, idLeccion } = req.params;
+    const cuerpo = validarReporteActividad(req.body);
+    const reporte = await crearReporteActividad(usuarioDe(res).id, idCurso, idLeccion, cuerpo);
+    res.status(201).json({ reporte });
   },
 );

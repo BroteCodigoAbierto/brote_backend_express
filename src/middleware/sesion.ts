@@ -52,8 +52,30 @@ export async function requerirSesion(req: Request, res: Response, siguiente: Nex
   siguiente();
 }
 
+// Deja pasar peticiones con o sin sesión (decisión 0020): si hay sesión vigente la
+// adjunta en res.locals.usuario y renueva cabeceras; si no, continúa como visitante.
+export async function sesionOpcional(req: Request, res: Response, siguiente: NextFunction) {
+  try {
+    const { headers, response } = await auth.api.getSession({
+      headers: cabecerasParaAuth(req),
+      returnHeaders: true,
+    });
+    if (response) {
+      reenviarSesion(headers, req, res);
+      res.locals.usuario = response.user;
+    }
+  } catch {
+    // sin sesión válida: sigue como visitante
+  }
+  siguiente();
+}
+
 export function usuarioDe(res: Response): UsuarioAuth {
   return res.locals.usuario as UsuarioAuth;
+}
+
+export function usuarioOpcionalDe(res: Response): UsuarioAuth | null {
+  return (res.locals.usuario as UsuarioAuth | undefined) ?? null;
 }
 
 // Decisión 0018: administrador es quien tiene su correo en CORREOS_ADMINISTRADORES.

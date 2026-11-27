@@ -33,9 +33,13 @@ model User {
   updatedAt     DateTime   @updatedAt
   sessions      Session[]
   accounts      Account[]
-  cursos        Curso[] // F02: cursos de los que es autor (no crea columnas)
-  progresos     Progreso[] // F04: lecciones completadas (no crea columnas)
-  insignias     Insignia[] // F08: cursos completados con insignia (no crea columnas)
+  cursos                   Curso[] // F02: cursos de los que es autor (no crea columnas)
+  progresos                Progreso[] // F04: lecciones completadas (no crea columnas)
+  insignias                Insignia[] // F08: cursos completados con insignia (no crea columnas)
+  membresiasOrganizacion   MiembroOrganizacion[] // F16: silos opcionales
+  gruposDocente            Grupo[] // F16: grupos creados como docente
+  membresiasGrupo          MiembroGrupo[] // F16: grupos donde participa como alumno
+  reportesActividad        ReporteActividad[] // F16: reportes enviados
 
   @@map("user")
 }
@@ -122,31 +126,51 @@ model Curso {
   idioma        String     @default("es")
   audios        Audio[]    @relation("AudiosCurso")
   // F08: si quien lo completa gana una insignia; lo cambia su autor en un borrador
-  daInsignia    Boolean    @default(false) @map("da_insignia")
-  insignias     Insignia[]
+  daInsignia     Boolean       @default(false) @map("da_insignia")
+  insignias      Insignia[]
+  // F16: metadatos de exploración, visibilidad flexible, fork y silo opcional
+  categoria      String        @default("otros")
+  nivel          String        @default("principiante")
+  etiquetas      String[]      @default([])
+  visibilidad    String        @default("publico") // "publico" | "enlacePrivado" | "organizacion"
+  claveEnlace    String?       @unique @map("clave_enlace")
+  idOrganizacion String?       @map("id_organizacion")
+  organizacion   Organizacion? @relation(fields: [idOrganizacion], references: [id], onDelete: SetNull)
+  tambienPublico Boolean       @default(false) @map("tambien_publico")
+  permiteFork    Boolean       @default(true) @map("permite_fork")
+  idCursoOrigen  String?       @map("id_curso_origen")
+  cursoOrigen    Curso?        @relation("ForkCurso", fields: [idCursoOrigen], references: [id], onDelete: SetNull)
+  bifurcaciones  Curso[]       @relation("ForkCurso")
+  grupos         Grupo[]
+  reportes       ReporteActividad[]
 
   @@index([idAutor])
+  @@index([idOrganizacion])
+  @@index([categoria, nivel])
   @@map("curso")
 }
 
 model Leccion {
-  id            String     @id @default(uuid(7))
-  idCurso       String     @map("id_curso")
-  curso         Curso      @relation(fields: [idCurso], references: [id], onDelete: Cascade)
+  id            String             @id @default(uuid(7))
+  idCurso       String             @map("id_curso")
+  curso         Curso              @relation(fields: [idCurso], references: [id], onDelete: Cascade)
   titulo        String
+  // F16: agrupación pedagógica opcional en módulos o unidades
+  modulo        String?
   posicion      Int // 1, 2, 3, ... dentro del curso
   // F03: lista de Actividad del contrato, en orden; solo se escribe después de validarActividades
-  actividades   Json       @default("[]")
+  actividades   Json               @default("[]")
   // sube cada vez que se guarda la lección; reordenar no la cambia (spec F05)
-  version       Int        @default(1)
+  version       Int                @default(1)
   // F13: los ids de las imágenes que usan sus actividades, sin repetir. Lo escribe
   // guardarLeccion; así "se usa en el curso" no tiene que leer el JSON
-  imagenes      String[]   @default([])
+  imagenes      String[]           @default([])
   // F14: lo mismo con los audios
-  audios        String[]   @default([])
-  creadoEn      DateTime   @default(now()) @map("creado_en")
-  actualizadoEn DateTime   @updatedAt @map("actualizado_en")
+  audios        String[]           @default([])
+  creadoEn      DateTime           @default(now()) @map("creado_en")
+  actualizadoEn DateTime           @updatedAt @map("actualizado_en")
   progresos     Progreso[] // F04 (no crea columnas)
+  reportes      ReporteActividad[] // F16
 
   @@unique([idCurso, posicion])
   @@map("leccion")
@@ -237,3 +261,90 @@ model Insignia {
   @@index([idCurso])
   @@map("insignia")
 }
+
+// ---------------------------------------------------------------------------
+// F16 (decisión 0020): Silos opcionales (Organizaciones / Espacios), Aulas y
+// reportes de error en actividades.
+// ---------------------------------------------------------------------------
+
+model Organizacion {
+  id                 String                @id @default(uuid(7))
+  slug               String                @unique
+  nombre             String
+  descripcion        String                @default("")
+  colorMarca         String?               @map("color_marca")
+  // "abierto" | "codigo" | "dominio"
+  modoAcceso         String                @default("codigo") @map("modo_acceso")
+  codigoAcceso       String?               @unique @map("codigo_acceso")
+  dominiosPermitidos String[]              @default([]) @map("dominios_permitidos")
+  requiereRevision   Boolean               @default(false) @map("requiere_revision")
+  creadoEn           DateTime              @default(now()) @map("creado_en")
+  actualizadoEn      DateTime              @updatedAt @map("actualizado_en")
+  miembros           MiembroOrganizacion[]
+  cursos             Curso[]
+  grupos             Grupo[]
+
+  @@map("organizacion")
+}
+
+model MiembroOrganizacion {
+  idOrganizacion String       @map("id_organizacion")
+  organizacion   Organizacion @relation(fields: [idOrganizacion], references: [id], onDelete: Cascade)
+  idUsuario      String       @map("id_usuario")
+  usuario        User         @relation(fields: [idUsuario], references: [id], onDelete: Cascade)
+  // "dueno" | "admin" | "docente" | "alumno"
+  rol            String       @default("alumno")
+  unidoEn        DateTime     @default(now()) @map("unido_en")
+
+  @@id([idOrganizacion, idUsuario])
+  @@index([idUsuario])
+  @@map("miembro_organizacion")
+}
+
+model Grupo {
+  id             String        @id @default(uuid(7))
+  codigo         String        @unique
+  nombre         String
+  idCurso        String        @map("id_curso")
+  curso          Curso         @relation(fields: [idCurso], references: [id], onDelete: Cascade)
+  idDocente      String        @map("id_docente")
+  docente        User          @relation(fields: [idDocente], references: [id], onDelete: Cascade)
+  idOrganizacion String?       @map("id_organizacion")
+  organizacion   Organizacion? @relation(fields: [idOrganizacion], references: [id], onDelete: SetNull)
+  creadoEn       DateTime      @default(now()) @map("creado_en")
+  miembros       MiembroGrupo[]
+
+  @@index([idDocente])
+  @@index([idCurso])
+  @@map("grupo")
+}
+
+model MiembroGrupo {
+  idGrupo   String   @map("id_grupo")
+  grupo     Grupo    @relation(fields: [idGrupo], references: [id], onDelete: Cascade)
+  idUsuario String   @map("id_usuario")
+  usuario   User     @relation(fields: [idUsuario], references: [id], onDelete: Cascade)
+  unidoEn   DateTime @default(now()) @map("unido_en")
+
+  @@id([idGrupo, idUsuario])
+  @@index([idUsuario])
+  @@map("miembro_grupo")
+}
+
+model ReporteActividad {
+  id              String   @id @default(uuid(7))
+  idCurso         String   @map("id_curso")
+  curso           Curso    @relation(fields: [idCurso], references: [id], onDelete: Cascade)
+  idLeccion       String   @map("id_leccion")
+  leccion         Leccion  @relation(fields: [idLeccion], references: [id], onDelete: Cascade)
+  indiceActividad Int      @map("indice_actividad")
+  idUsuario       String   @map("id_usuario")
+  usuario         User     @relation(fields: [idUsuario], references: [id], onDelete: Cascade)
+  mensaje         String
+  resuelto        Boolean  @default(false)
+  creadoEn        DateTime @default(now()) @map("creado_en")
+
+  @@index([idCurso, resuelto])
+  @@map("reporte_actividad")
+}
+

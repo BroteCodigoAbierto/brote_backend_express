@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { esAdministrador, requerirSesion, usuarioDe } from "../middleware/sesion.ts";
+import { esAdministrador, sesionOpcional, usuarioOpcionalDe } from "../middleware/sesion.ts";
 import { traerAudio } from "../servicios/audios.ts";
 import { TIPO_MIME_AUDIO } from "../tipos/contrato.ts";
 
@@ -9,12 +9,14 @@ import { TIPO_MIME_AUDIO } from "../tipos/contrato.ts";
 // clientes traen el audio completo antes de reproducirlo (research de F14, punto 6).
 export const rutasAudios = Router();
 
-rutasAudios.get<{ idAudio: string }>("/:idAudio", requerirSesion, async (req, res) => {
-  const usuario = usuarioDe(res);
+rutasAudios.get<{ idAudio: string }>("/:idAudio", sesionOpcional, async (req, res) => {
+  const usuario = usuarioOpcionalDe(res);
+  const clave = typeof req.query.clave === "string" ? req.query.clave : null;
   const { datos, formato, huella } = await traerAudio(
-    usuario.id,
+    usuario?.id ?? null,
     req.params.idAudio,
-    esAdministrador(usuario),
+    usuario ? esAdministrador(usuario) : false,
+    clave,
   );
   res.set({
     "Content-Type": TIPO_MIME_AUDIO[formato],

@@ -11,6 +11,7 @@ import {
 } from "../tipos/contrato.ts";
 import type { AudioSubido } from "../validacion/audios.ts";
 import { limpiarArchivosSinUsar, pesoArchivosCurso } from "./archivos.ts";
+import { puedeVerCursoPublicado } from "./cursos.ts";
 import { conCursoEditable } from "./editor.ts";
 
 // Los audios de los cursos (spec F14; brote_specs, research de F14, puntos 1, 6 y 7), con las
@@ -101,23 +102,54 @@ export async function subirAudio(
   });
 }
 
-type CursoDelArchivo = { publicado: boolean; idAutor: string; revision: string | null };
+type CursoDelArchivo = {
+  id: string;
+  publicado: boolean;
+  idAutor: string;
+  revision: string | null;
+  visibilidad: string;
+  claveEnlace: string | null;
+  idOrganizacion: string | null;
+  tambienPublico: boolean;
+  organizacion: { modoAcceso: string } | null;
+};
 
-function seVeElCurso(curso: CursoDelArchivo, idUsuario: string, esAdministrador: boolean) {
-  if (curso.publicado || curso.idAutor === idUsuario) return true;
-  return esAdministrador && curso.revision === "pendiente";
+async function seVeElCurso(
+  curso: CursoDelArchivo,
+  idUsuario: string | null,
+  esAdministrador: boolean,
+  claveEnlace?: string | null,
+): Promise<boolean> {
+  if (idUsuario && curso.idAutor === idUsuario) return true;
+  if (curso.publicado) {
+    if (curso.visibilidad === "enlacePrivado") return true;
+    return puedeVerCursoPublicado(curso, idUsuario, claveEnlace);
+  }
+  if (curso.revision === "pendiente") {
+    if (esAdministrador) return true;
+    if (idUsuario && curso.idOrganizacion) {
+      const miembro = await bd.miembroOrganizacion.findUnique({
+        where: {
+          idOrganizacion_idUsuario: { idOrganizacion: curso.idOrganizacion, idUsuario },
+        },
+        select: { rol: true },
+      });
+      return miembro?.rol === "dueno" || miembro?.rol === "admin";
+    }
+  }
+  return false;
 }
 
 export type ArchivoAudio = { datos: Buffer; formato: FormatoAudio; huella: string };
 
 // Un audio se oye donde se ve su curso: el de un borrador o un curso en revisión, solo su
-// autor; el de un curso publicado, cualquiera con sesión. Si no, el mismo 404 que si no
-// existe, para no revelar cursos sin publicar. Decisión 0018: el de un curso en revisión,
-// también un administrador, que lo prueba antes de aprobarlo.
+// autor (o moderadores globales/de organización en revisión); el de un curso publicado,
+// cualquiera con acceso al curso (incluidos visitantes en la muestra abierta).
 export async function traerAudio(
-  idUsuario: string,
+  idUsuario: string | null,
   idAudio: string,
   esAdministrador: boolean,
+  claveEnlace?: string | null,
 ): Promise<ArchivoAudio> {
   const audio = await bd.audio.findUnique({
     where: { id: idAudio },
@@ -125,10 +157,22 @@ export async function traerAudio(
       datos: true,
       formato: true,
       huella: true,
-      curso: { select: { publicado: true, idAutor: true, revision: true } },
+      curso: {
+        select: {
+          id: true,
+          publicado: true,
+          idAutor: true,
+          revision: true,
+          visibilidad: true,
+          claveEnlace: true,
+          idOrganizacion: true,
+          tambienPublico: true,
+          organizacion: { select: { modoAcceso: true } },
+        },
+      },
     },
   });
-  if (!audio || !seVeElCurso(audio.curso, idUsuario, esAdministrador)) {
+  if (!audio || !(await seVeElCurso(audio.curso, idUsuario, esAdministrador, claveEnlace))) {
     throw new ErrorApi(404, MENSAJES_AUDIOS.audioNoDisponible);
   }
   return {

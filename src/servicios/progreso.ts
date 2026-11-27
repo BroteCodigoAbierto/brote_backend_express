@@ -137,7 +137,13 @@ export async function traerCursosEmpezados(idUsuario: string): Promise<CursoEmpe
               titulo: true,
               descripcion: true,
               idPortada: true,
+              idioma: true,
+              categoria: true,
+              nivel: true,
+              daInsignia: true,
+              permiteFork: true,
               autor: { select: { id: true, name: true } },
+              organizacion: { select: { id: true, slug: true, nombre: true, colorMarca: true } },
               _count: { select: { lecciones: true } },
             },
           },
@@ -153,15 +159,25 @@ export async function traerCursosEmpezados(idUsuario: string): Promise<CursoEmpe
     const empezado = cursos.get(curso.id);
     if (empezado) {
       empezado.leccionesCompletadas += 1;
+      empezado.completado =
+        empezado.cantidadLecciones > 0 && empezado.leccionesCompletadas >= empezado.cantidadLecciones;
       continue;
     }
+    const cantidadLecciones = curso._count.lecciones;
     cursos.set(curso.id, {
       id: curso.id,
       titulo: curso.titulo,
       descripcion: curso.descripcion,
       autor: { id: curso.autor.id, nombre: curso.autor.name },
-      cantidadLecciones: curso._count.lecciones,
+      cantidadLecciones,
       idPortada: curso.idPortada,
+      idioma: curso.idioma as CursoEmpezado["idioma"],
+      categoria: curso.categoria as CursoEmpezado["categoria"],
+      nivel: curso.nivel as CursoEmpezado["nivel"],
+      daInsignia: curso.daInsignia,
+      permiteFork: curso.permiteFork,
+      completado: cantidadLecciones > 0 && 1 >= cantidadLecciones,
+      organizacion: curso.organizacion,
       leccionesCompletadas: 1,
       ultimoAvanceEn: completadaEn.toISOString(),
     });
