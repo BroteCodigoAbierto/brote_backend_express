@@ -61,10 +61,7 @@ function lanzarSiHayErrores(errores: Errores) {
   }
 }
 
-function idOpcionalDe(
-  cuerpo: unknown,
-  clave: string,
-): { valor?: string | null; error?: string } {
+function idOpcionalDe(cuerpo: unknown, clave: string): { valor?: string | null; error?: string } {
   if (!esObjeto(cuerpo) || !(clave in cuerpo)) return {};
   const valor = cuerpo[clave];
   if (valor === null) return { valor: null };
@@ -85,10 +82,7 @@ function deLista<T extends string>(
   return { error: MENSAJES_EDITOR.datosInvalidos };
 }
 
-function booleanoOpcionalDe(
-  cuerpo: unknown,
-  clave: string,
-): { valor?: boolean; error?: string } {
+function booleanoOpcionalDe(cuerpo: unknown, clave: string): { valor?: boolean; error?: string } {
   if (!esObjeto(cuerpo) || !(clave in cuerpo)) return {};
   const valor = cuerpo[clave];
   if (typeof valor === "boolean") return { valor };

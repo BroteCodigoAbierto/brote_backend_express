@@ -90,7 +90,9 @@ async function calcularPuedePublicarDirecto(
       select: { rol: true, organizacion: { select: { requiereRevision: true } } },
     });
     if (!miembro || miembro.rol === "alumno") return false;
-    return !miembro.organizacion.requiereRevision || miembro.rol === "dueno" || miembro.rol === "admin";
+    return (
+      !miembro.organizacion.requiereRevision || miembro.rol === "dueno" || miembro.rol === "admin"
+    );
   }
   return false;
 }
@@ -245,10 +247,7 @@ export async function traerCursosDelAutor(idAutor: string): Promise<CursoDelAuto
   }));
 }
 
-export async function crearCurso(
-  idAutor: string,
-  datos: CuerpoDatosCurso,
-): Promise<CursoEnEditor> {
+export async function crearCurso(idAutor: string, datos: CuerpoDatosCurso): Promise<CursoEnEditor> {
   const idOrganizacion = datos.idOrganizacion ?? null;
   const visibilidad: VisibilidadCurso =
     datos.visibilidad ?? (idOrganizacion ? "organizacion" : "publico");
@@ -335,11 +334,11 @@ export async function actualizarCurso(
     }
 
     const claveEnlaceFinal =
-      visibilidadFinal === "enlacePrivado" ? (antes.claveEnlace ?? generarClaveEnlace()) : antes.claveEnlace;
+      visibilidadFinal === "enlacePrivado"
+        ? (antes.claveEnlace ?? generarClaveEnlace())
+        : antes.claveEnlace;
     const tambienPublicoFinal =
-      visibilidadFinal === "organizacion"
-        ? (datos.tambienPublico ?? antes.tambienPublico)
-        : false;
+      visibilidadFinal === "organizacion" ? (datos.tambienPublico ?? antes.tambienPublico) : false;
 
     await tx.curso.update({
       where: { id: idCurso },
@@ -683,7 +682,15 @@ export async function bifurcarCurso(
       idPortada: true,
       organizacion: { select: { modoAcceso: true } },
       imagenes: {
-        select: { id: true, huella: true, formato: true, ancho: true, alto: true, peso: true, datos: true },
+        select: {
+          id: true,
+          huella: true,
+          formato: true,
+          ancho: true,
+          alto: true,
+          peso: true,
+          datos: true,
+        },
       },
       audios: {
         select: { id: true, huella: true, formato: true, duracion: true, peso: true, datos: true },

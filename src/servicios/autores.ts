@@ -31,10 +31,7 @@ export async function traerPerfilAutor(
       cursos: {
         where: {
           publicado: true,
-          OR: [
-            { visibilidad: "publico" },
-            { visibilidad: "organizacion", tambienPublico: true },
-          ],
+          OR: [{ visibilidad: "publico" }, { visibilidad: "organizacion", tambienPublico: true }],
         },
         orderBy: [{ creadoEn: "desc" }],
         select: {
@@ -72,7 +69,9 @@ export async function traerPerfilAutor(
     const completado =
       idUsuarioVisitante !== null &&
       c.lecciones.length > 0 &&
-      c.lecciones.every((l) => "progresos" in l && Array.isArray(l.progresos) && l.progresos.length > 0);
+      c.lecciones.every(
+        (l) => "progresos" in l && Array.isArray(l.progresos) && l.progresos.length > 0,
+      );
     return {
       id: c.id,
       titulo: c.titulo,

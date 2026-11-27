@@ -5,11 +5,7 @@ import {
   usuarioDe,
   usuarioOpcionalDe,
 } from "../middleware/sesion.ts";
-import {
-  traerCatalogo,
-  traerCursoPorEnlace,
-  traerCursoPublicado,
-} from "../servicios/cursos.ts";
+import { traerCatalogo, traerCursoPorEnlace, traerCursoPublicado } from "../servicios/cursos.ts";
 import { traerLeccionPublicada } from "../servicios/lecciones.ts";
 import { registrarProgreso } from "../servicios/progreso.ts";
 import { crearReporteActividad } from "../servicios/reportes.ts";

@@ -6,11 +6,7 @@ import {
   traerGruposDelUsuario,
   unirseAGrupo,
 } from "../servicios/grupos.ts";
-import type {
-  RespuestaAvanceGrupo,
-  RespuestaGrupo,
-  RespuestaGrupos,
-} from "../tipos/contrato.ts";
+import type { RespuestaAvanceGrupo, RespuestaGrupo, RespuestaGrupos } from "../tipos/contrato.ts";
 import { validarCrearGrupo, validarUnirseGrupo } from "../validacion/grupos.ts";
 
 export const rutasGrupos = Router();

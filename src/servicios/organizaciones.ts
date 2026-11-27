@@ -134,7 +134,10 @@ export async function unirseAOrganizacion(
 ): Promise<OrganizacionPropia> {
   const org = await bd.organizacion.findFirst({
     where: {
-      OR: [{ codigoAcceso: { equals: codigo, mode: "insensitive" } }, { slug: codigo.toLowerCase() }],
+      OR: [
+        { codigoAcceso: { equals: codigo, mode: "insensitive" } },
+        { slug: codigo.toLowerCase() },
+      ],
     },
     select: {
       id: true,
@@ -174,7 +177,9 @@ export async function unirseAOrganizacion(
     select: { rol: true },
   });
 
-  const cantidadMiembros = await bd.miembroOrganizacion.count({ where: { idOrganizacion: org.id } });
+  const cantidadMiembros = await bd.miembroOrganizacion.count({
+    where: { idOrganizacion: org.id },
+  });
   const puedeVerCodigo =
     membresia.rol === "dueno" || membresia.rol === "admin" || membresia.rol === "docente";
 

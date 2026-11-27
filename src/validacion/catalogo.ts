@@ -36,10 +36,7 @@ function errorCursor() {
   return new ErrorApi(400, MENSAJES_CATALOGO.cargaInvalida);
 }
 
-function leerEnumOpcional<T extends string>(
-  valor: unknown,
-  permitidos: readonly T[],
-): T | null {
+function leerEnumOpcional<T extends string>(valor: unknown, permitidos: readonly T[]): T | null {
   if (typeof valor !== "string" || valor.trim() === "") return null;
   const limpio = valor.trim();
   return (permitidos as readonly string[]).includes(limpio) ? (limpio as T) : null;

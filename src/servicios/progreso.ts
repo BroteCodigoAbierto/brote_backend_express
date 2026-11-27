@@ -160,7 +160,8 @@ export async function traerCursosEmpezados(idUsuario: string): Promise<CursoEmpe
     if (empezado) {
       empezado.leccionesCompletadas += 1;
       empezado.completado =
-        empezado.cantidadLecciones > 0 && empezado.leccionesCompletadas >= empezado.cantidadLecciones;
+        empezado.cantidadLecciones > 0 &&
+        empezado.leccionesCompletadas >= empezado.cantidadLecciones;
       continue;
     }
     const cantidadLecciones = curso._count.lecciones;

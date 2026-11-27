@@ -106,11 +106,15 @@ rutasEditor.get("/reportes", requerirSesion, async (_req, res) => {
   res.json(respuesta);
 });
 
-rutasEditor.patch<{ idReporte: string }>("/reportes/:idReporte", requerirSesion, async (req, res) => {
-  const { resuelto } = validarEstadoReporte(req.body);
-  const reporte = await cambiarEstadoReporte(usuarioDe(res).id, req.params.idReporte, resuelto);
-  res.json({ reporte });
-});
+rutasEditor.patch<{ idReporte: string }>(
+  "/reportes/:idReporte",
+  requerirSesion,
+  async (req, res) => {
+    const { resuelto } = validarEstadoReporte(req.body);
+    const reporte = await cambiarEstadoReporte(usuarioDe(res).id, req.params.idReporte, resuelto);
+    res.json({ reporte });
+  },
+);
 
 rutasEditor.get<ParamsCurso>("/cursos/:idCurso", requerirSesion, async (req, res) => {
   const respuesta: RespuestaCursoEnEditor = {
@@ -160,16 +164,12 @@ rutasEditor.delete<ParamsCurso>("/cursos/:idCurso/revision", requerirSesion, asy
 });
 
 // F16: publicación directa para cursos de enlace privado u organizaciones sin revisión obligatoria.
-rutasEditor.post<ParamsCurso>(
-  "/cursos/:idCurso/publicacion",
-  requerirSesion,
-  async (req, res) => {
-    const respuesta: RespuestaCursoEnEditor = {
-      curso: await publicarDirecto(usuarioDe(res).id, req.params.idCurso),
-    };
-    res.json(respuesta);
-  },
-);
+rutasEditor.post<ParamsCurso>("/cursos/:idCurso/publicacion", requerirSesion, async (req, res) => {
+  const respuesta: RespuestaCursoEnEditor = {
+    curso: await publicarDirecto(usuarioDe(res).id, req.params.idCurso),
+  };
+  res.json(respuesta);
+});
 
 rutasEditor.delete<ParamsCurso>(
   "/cursos/:idCurso/publicacion",

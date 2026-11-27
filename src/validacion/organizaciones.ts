@@ -29,9 +29,15 @@ export function validarCrearOrganizacion(cuerpo: unknown): CuerpoCrearOrganizaci
 
   const errores: Record<string, string> = {};
   if (!nombre) errores.nombre = MENSAJES_EDITOR.campoObligatorio;
-  else if (largo(nombre) > LIMITES_ORGANIZACION.nombreMax) errores.nombre = MENSAJES_EDITOR.textoLargo;
+  else if (largo(nombre) > LIMITES_ORGANIZACION.nombreMax)
+    errores.nombre = MENSAJES_EDITOR.textoLargo;
 
-  if (!slug || slug.length < 3 || slug.length > LIMITES_ORGANIZACION.slugMax || !PATRON_SLUG.test(slug)) {
+  if (
+    !slug ||
+    slug.length < 3 ||
+    slug.length > LIMITES_ORGANIZACION.slugMax ||
+    !PATRON_SLUG.test(slug)
+  ) {
     errores.slug = MENSAJES_ORGANIZACION.slugInvalido;
   }
 
@@ -40,7 +46,12 @@ export function validarCrearOrganizacion(cuerpo: unknown): CuerpoCrearOrganizaci
   }
 
   let colorMarca: string | null = null;
-  if ("colorMarca" in cuerpo && cuerpo.colorMarca !== undefined && cuerpo.colorMarca !== null && cuerpo.colorMarca !== "") {
+  if (
+    "colorMarca" in cuerpo &&
+    cuerpo.colorMarca !== undefined &&
+    cuerpo.colorMarca !== null &&
+    cuerpo.colorMarca !== ""
+  ) {
     if (typeof cuerpo.colorMarca === "string" && PATRON_COLOR.test(cuerpo.colorMarca.trim())) {
       colorMarca = cuerpo.colorMarca.trim();
     } else {
@@ -69,7 +80,8 @@ export function validarCrearOrganizacion(cuerpo: unknown): CuerpoCrearOrganizaci
     }
   }
 
-  const requiereRevision = typeof cuerpo.requiereRevision === "boolean" ? cuerpo.requiereRevision : false;
+  const requiereRevision =
+    typeof cuerpo.requiereRevision === "boolean" ? cuerpo.requiereRevision : false;
 
   if (Object.keys(errores).length > 0) {
     throw new ErrorApi(400, MENSAJES_EDITOR.datosInvalidos, errores);
